@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Typecast — Typing Speed Test</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #101216;
+    --card: #1a1d22;
+    --card-2: #20242a;
+    --hairline: #2b2f36;
+    --muted: #5b616c;
+    --ink: #f2f1ec;
+    --brass: #d9a441;
+    --brass-dim: #8a713a;
+    --good: #4ade80;
+    --bad: #ef4444;
+    --bad-bg: rgba(239,68,68,0.12);
+  }
+  html,body{ background: var(--bg); }
+  body{ font-family: 'Space Grotesk', sans-serif; }
+  .mono{ font-family: 'JetBrains Mono', monospace; }
+
+  .paper-rail{
+    position: relative;
+    height: 6px;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--hairline) 0px, var(--hairline) 1px,
+      transparent 1px, transparent 24px
+    );
+    border-radius: 2px;
+  }
+  .carriage{
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background: var(--brass);
+    border-radius: 2px;
+    box-shadow: 0 0 0 4px rgba(217,164,65,0.15), 0 0 14px rgba(217,164,65,0.5);
+    transition: left 120ms ease-out;
+  }
+
+  .char-pending{ color: var(--muted); }
+  .char-correct{ color: var(--ink); }
+  .char-incorrect{ color: var(--bad); background: var(--bad-bg); border-radius: 2px; }
+  .char-current{ position: relative; }
+  .char-current::before{
+    content: '';
+    position: absolute;
+    left: -1px; top: -2px; bottom: -2px;
+    width: 2px;
+    background: var(--brass);
+    animation: blink 1s step-start infinite;
+  }
+  @keyframes blink{ 50% { opacity: 0; } }
+
+  .key-hint{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    border: 1px solid var(--hairline);
+    background: var(--card-2);
+    color: var(--muted);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .time-pill{
+    transition: all 150ms ease;
+  }
+  .time-pill.active{
+    background: var(--brass);
+    color: #14161a;
+    font-weight: 600;
+  }
+
+  .fade-in{ animation: fadeIn 320ms ease both; }
+  @keyframes fadeIn{ from{ opacity:0; transform: translateY(6px);} to{opacity:1; transform: translateY(0);} }
+
+  ::selection{ background: rgba(217,164,65,0.35); }
+
+  @media (prefers-reduced-motion: reduce){
+    .carriage{ transition: none; }
+    .char-current::before{ animation: none; }
+    .fade-in{ animation: none; }
+  }
+</style>
+</head>
+<body class="min-h-screen text-[var(--ink)] flex flex-col items-center px-4 py-10 md:py-16">
+
+  <!-- Header -->
+  <header class="w-full max-w-4xl flex items-center justify-between mb-10 md:mb-14">
+    <div class="flex items-baseline gap-2">
+      <h1 class="text-xl md:text-2xl font-semibold tracking-tight">Typecast</h1>
+      <span class="mono text-[11px] text-[var(--muted)] hidden sm:inline">— a typing speed test</span>
+    </div>
+    <div class="flex items-center gap-1 mono text-xs" id="timeSelector">
+      <!-- time pills injected -->
+    </div>
+  </header>
+
+  <!-- Main card -->
+  <main class="w-full max-w-4xl">
+
+    <!-- Carriage rail (signature element) -->
+    <div class="paper-rail mb-8">
+      <div class="carriage" id="carriage" style="left:0%"></div>
+    </div>
+
+    <!-- Typing surface -->
+    <section id="typingCard" class="bg-[var(--card)] border border-[var(--hairline)] rounded-2xl p-6 md:p-10 shadow-2xl shadow-black/40">
+
+      <!-- Stat strip -->
+      <div class="flex items-center justify-between mb-6 md:mb-8">
+        <div class="flex items-baseline gap-1.5">
+          <span class="text-3xl md:text-4xl font-semibold tabular-nums" id="timerDisplay">60</span>
+          <span class="mono text-xs text-[var(--muted)]">sec</span>
+        </div>
+        <div class="flex gap-6 mono text-xs text-[var(--muted)]">
+          <div class="text-right">
+            <div class="text-[var(--ink)] text-lg font-medium tabular-nums" id="liveWpm">0</div>
+            <div>wpm</div>
+          </div>
+          <div class="text-right">
+            <div class="text-[var(--ink)] text-lg font-medium tabular-nums" id="liveAcc">100</div>
+            <div>acc</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Text display -->
+      <div class="relative">
+        <p id="textDisplay" class="mono text-lg md:text-2xl leading-relaxed md:leading-loose tracking-wide select-none" style="letter-spacing:0.02em;"></p>
+        <input id="hiddenInput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          class="absolute opacity-0 pointer-events-none top-0 left-0 w-1 h-1" />
+      </div>
+
+      <!-- Footer controls -->
+      <div class="flex items-center justify-between mt-8 pt-6 border-t border-[var(--hairline)]">
+        <div class="flex items-center gap-2 text-[var(--muted)]">
+          <span class="key-hint">tab</span><span class="mono text-xs">+</span><span class="key-hint">enter</span>
+          <span class="mono text-xs ml-1">to restart</span>
+        </div>
+        <button id="restartBtn" class="group flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--hairline)] hover:border-[var(--brass)] transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[var(--muted)] group-hover:text-[var(--brass)] transition-colors">
+            <path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+          <span class="mono text-xs text-[var(--muted)] group-hover:text-[var(--brass)] transition-colors">restart</span>
+        </button>
+      </div>
+
+    </section>
+
+    <!-- Results panel -->
+    <section id="resultsCard" class="hidden bg-[var(--card)] border border-[var(--hairline)] rounded-2xl p-8 md:p-12 shadow-2xl shadow-black/40 fade-in">
+      <div class="flex items-center justify-between mb-8">
+        <h2 class="text-lg font-semibold text-[var(--brass)]">Results</h2>
+        <span class="mono text-xs text-[var(--muted)]" id="resultMeta"></span>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+        <div>
+          <div class="text-4xl font-semibold tabular-nums" id="finalWpm">0</div>
+          <div class="mono text-xs text-[var(--muted)] mt-1">words / min</div>
+        </div>
+        <div>
+          <div class="text-4xl font-semibold tabular-nums" id="finalAcc">0</div>
+          <div class="mono text-xs text-[var(--muted)] mt-1">% accuracy</div>
+        </div>
+        <div>
+          <div class="text-4xl font-semibold tabular-nums text-[var(--bad)]" id="finalErrors">0</div>
+          <div class="mono text-xs text-[var(--muted)] mt-1">errors</div>
+        </div>
+        <div>
+          <div class="text-4xl font-semibold tabular-nums" id="finalChars">0</div>
+          <div class="mono text-xs text-[var(--muted)] mt-1">characters</div>
+        </div>
+      </div>
+      <button id="tryAgainBtn" class="w-full py-3 rounded-lg bg-[var(--brass)] text-[#14161a] font-semibold hover:brightness-110 transition">
+        Type again
+      </button>
+    </section>
+
+  </main>
+
+  <footer class="mt-10 mono text-[11px] text-[var(--muted)]">
+    click anywhere and start typing — the clock starts on your first key
+  </footer>
+
+<script>
+/* ---------------------------------------------------------
+   DATA
+--------------------------------------------------------- */
+const PARAGRAPHS = [
+  "The old lighthouse keeper climbed the spiral stairs every evening, counting each worn stone step as the wind pressed cold against the glass. Below him the sea folded quietly into darkness, patient and enormous, waiting for a light it already trusted would come.",
+  "In the workshop, sawdust drifted through a single shaft of afternoon light while the carpenter turned a rough plank over in his hands, reading its grain like a sentence he had written himself years ago and was only now learning to finish.",
+  "Somewhere between the second and third cup of coffee, the idea finally arrived, not as a flash but as a slow unfolding, the way fog lifts off a valley to reveal a road that had been there the entire time.",
+  "The train pulled away from the platform just as the rain began, and through the fogged window the city blurred into soft shapes of orange light, each one a window, each window a small unfinished story rushing past.",
+  "She kept the letter in the same drawer for eleven years, not because she planned to read it again but because throwing it away felt like erasing a version of herself that had once been brave enough to write it.",
+  "The market opened before dawn, stalls lit by bare bulbs strung between poles, vendors calling out prices in voices already hoarse, the smell of ginger and diesel mixing in the cool air like two arguments that never resolve.",
+  "A good bridge does not announce itself, the engineer said, tapping the blueprint with one finger, it simply lets you cross without ever noticing the river was a problem at all.",
+  "By the time the museum closed, only the night guard remained, walking past paintings whose colors seemed to deepen in the low light, as though the pigments had been waiting all day for someone to finally slow down and look."
+];
+
+const TIME_OPTIONS = [15, 30, 60];
+const DEFAULT_TIME = 60;
+
+/* ---------------------------------------------------------
+   STATE
+--------------------------------------------------------- */
+let state = {
+  selectedTime: DEFAULT_TIME,
+  timeLeft: DEFAULT_TIME,
+  timerId: null,
+  started: false,
+  finished: false,
+  currentText: "",
+  typedChars: [],      // array of {char, correct: true|false|null}
+  totalTyped: 0,
+  totalCorrect: 0,
+  totalErrors: 0,
+  tabPressed: false,
+};
+
+/* ---------------------------------------------------------
+   DOM REFS
+--------------------------------------------------------- */
+const el = {
+  timeSelector: document.getElementById('timeSelector'),
+  timerDisplay: document.getElementById('timerDisplay'),
+  liveWpm: document.getElementById('liveWpm'),
+  liveAcc: document.getElementById('liveAcc'),
+  textDisplay: document.getElementById('textDisplay'),
+  hiddenInput: document.getElementById('hiddenInput'),
+  carriage: document.getElementById('carriage'),
+  typingCard: document.getElementById('typingCard'),
+  resultsCard: document.getElementById('resultsCard'),
+  restartBtn: document.getElementById('restartBtn'),
+  tryAgainBtn: document.getElementById('tryAgainBtn'),
+  finalWpm: document.getElementById('finalWpm'),
+  finalAcc: document.getElementById('finalAcc'),
+  finalErrors: document.getElementById('finalErrors'),
+  finalChars: document.getElementById('finalChars'),
+  resultMeta: document.getElementById('resultMeta'),
+};
+
+/* ---------------------------------------------------------
+   INIT TIME PILLS
+--------------------------------------------------------- */
+function renderTimePills(){
+  el.timeSelector.innerHTML = "";
+  TIME_OPTIONS.forEach(t => {
+    const btn = document.createElement('button');
+    btn.textContent = t + "s";
+    btn.className = "time-pill px-3 py-1.5 rounded-md border border-[var(--hairline)] text-[var(--muted)]" +
+      (t === state.selectedTime ? " active" : "");
+    btn.addEventListener('click', () => {
+      if (state.started && !state.finished) return; // don't allow mid-test switch
+      state.selectedTime = t;
+      resetTest();
+    });
+    el.timeSelector.appendChild(btn);
+  });
+}
+
+/* ---------------------------------------------------------
+   TEXT RENDERING
+--------------------------------------------------------- */
+function pickParagraph(){
+  return PARAGRAPHS[Math.floor(Math.random() * PARAGRAPHS.length)];
+}
+
+function renderText(){
+  el.textDisplay.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  state.currentText.split("").forEach((ch, i) => {
+    const span = document.createElement('span');
+    span.textContent = ch;
+    span.dataset.index = i;
+    span.className = "char-pending";
+    frag.appendChild(span);
+  });
+  el.textDisplay.appendChild(frag);
+  updateCurrentCharMarker();
+}
+
+function updateCurrentCharMarker(){
+  const spans = el.textDisplay.children;
+  const idx = state.typedChars.length;
+  Array.from(spans).forEach(s => s.classList.remove('char-current'));
+  if (spans[idx]) spans[idx].classList.add('char-current');
+
+  // move carriage along the rail based on progress
+  const pct = state.currentText.length ? (idx / state.currentText.length) * 100 : 0;
+  el.carriage.style.left = pct + "%";
+}
+
+/* ---------------------------------------------------------
+   TIMER
+--------------------------------------------------------- */
+function startTimer(){
+  state.started = true;
+  state.timerId = setInterval(() => {
+    state.timeLeft -= 1;
+    el.timerDisplay.textContent = state.timeLeft;
+    updateLiveStats();
+    if (state.timeLeft <= 0){
+      finishTest();
+    }
+  }, 1000);
+}
+
+/* ---------------------------------------------------------
+   METRICS
+   WPM = (total characters typed / 5) / (time elapsed in minutes)
+   Accuracy = (correct characters / total typed characters) * 100
+--------------------------------------------------------- */
+function computeElapsedMinutes(){
+  const elapsedSeconds = state.selectedTime - state.timeLeft;
+  return Math.max(elapsedSeconds, 1) / 60; // avoid divide-by-zero on the very first tick
+}
+
+function updateLiveStats(){
+  const minutes = computeElapsedMinutes();
+  const wpm = Math.round((state.totalTyped / 5) / minutes);
+  const acc = state.totalTyped > 0
+    ? Math.round((state.totalCorrect / state.totalTyped) * 100)
+    : 100;
+  el.liveWpm.textContent = isFinite(wpm) && wpm > 0 ? wpm : 0;
+  el.liveAcc.textContent = acc;
+}
+
+/* ---------------------------------------------------------
+   INPUT HANDLING
+--------------------------------------------------------- */
+function handleKeydown(e){
+  if (state.finished) return;
+
+  // Tab+Enter shortcut to restart
+  if (e.key === 'Tab'){
+    state.tabPressed = true;
+    e.preventDefault();
+    return;
+  }
+  if (e.key === 'Enter' && state.tabPressed){
+    resetTest();
+    return;
+  }
+  if (e.key !== 'Tab') state.tabPressed = false;
+
+  if (e.key === 'Backspace'){
+    e.preventDefault();
+    if (state.typedChars.length > 0){
+      const removed = state.typedChars.pop();
+      state.totalTyped -= 1;
+      if (removed.correct) state.totalCorrect -= 1;
+      else state.totalErrors -= 1;
+      const spans = el.textDisplay.children;
+      const idx = state.typedChars.length;
+      spans[idx].className = "char-pending";
+      updateCurrentCharMarker();
+      updateLiveStats();
+    }
+    return;
+  }
+
+  // Ignore modifier / control keys
+  if (e.key.length !== 1) return;
+  e.preventDefault();
+
+  if (!state.started) startTimer();
+
+  const idx = state.typedChars.length;
+  if (idx >= state.currentText.length) return; // paragraph complete
+
+  const expected = state.currentText[idx];
+  const isCorrect = e.key === expected;
+
+  state.typedChars.push({ char: e.key, correct: isCorrect });
+  state.totalTyped += 1;
+  if (isCorrect){
+    state.totalCorrect += 1;
+  } else {
+    state.totalErrors += 1;
+  }
+
+  const span = el.textDisplay.children[idx];
+  span.className = isCorrect ? "char-correct" : "char-incorrect";
+
+  updateCurrentCharMarker();
+  updateLiveStats();
+
+  if (state.typedChars.length >= state.currentText.length){
+    finishTest();
+  }
+}
+
+/* ---------------------------------------------------------
+   FINISH / RESET
+--------------------------------------------------------- */
+function finishTest(){
+  if (state.finished) return;
+  state.finished = true;
+  clearInterval(state.timerId);
+
+  const minutes = computeElapsedMinutes();
+  const finalWpm = Math.round((state.totalTyped / 5) / minutes);
+  const finalAcc = state.totalTyped > 0
+    ? Math.round((state.totalCorrect / state.totalTyped) * 100)
+    : 100;
+
+  el.finalWpm.textContent = isFinite(finalWpm) && finalWpm > 0 ? finalWpm : 0;
+  el.finalAcc.textContent = finalAcc;
+  el.finalErrors.textContent = state.totalErrors;
+  el.finalChars.textContent = state.totalTyped;
+  el.resultMeta.textContent = `${state.selectedTime}s test`;
+
+  el.typingCard.classList.add('hidden');
+  el.resultsCard.classList.remove('hidden');
+}
+
+function resetTest(){
+  clearInterval(state.timerId);
+  state = {
+    selectedTime: state.selectedTime,
+    timeLeft: state.selectedTime,
+    timerId: null,
+    started: false,
+    finished: false,
+    currentText: pickParagraph(),
+    typedChars: [],
+    totalTyped: 0,
+    totalCorrect: 0,
+    totalErrors: 0,
+    tabPressed: false,
+  };
+
+  el.timerDisplay.textContent = state.timeLeft;
+  el.liveWpm.textContent = 0;
+  el.liveAcc.textContent = 100;
+  el.carriage.style.left = "0%";
+
+  el.resultsCard.classList.add('hidden');
+  el.typingCard.classList.remove('hidden');
+
+  renderTimePills();
+  renderText();
+  focusInput();
+}
+
+function focusInput(){
+  el.hiddenInput.focus({ preventScroll: true });
+}
+
+/* ---------------------------------------------------------
+   WIRE UP
+--------------------------------------------------------- */
+document.addEventListener('keydown', handleKeydown);
+document.addEventListener('click', focusInput);
+el.restartBtn.addEventListener('click', resetTest);
+el.tryAgainBtn.addEventListener('click', resetTest);
+
+// Prevent losing focus from hidden input on mobile taps
+el.hiddenInput.addEventListener('blur', () => {
+  if (!state.finished) setTimeout(focusInput, 10);
+});
+
+resetTest();
+</script>
+</body>
+</html>
