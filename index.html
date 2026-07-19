@@ -1,193 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Typecast — Typing Speed Test</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg: #101216;
-    --card: #1a1d22;
-    --card-2: #20242a;
-    --hairline: #2b2f36;
-    --muted: #5b616c;
-    --ink: #f2f1ec;
-    --brass: #d9a441;
-    --brass-dim: #8a713a;
-    --good: #4ade80;
-    --bad: #ef4444;
-    --bad-bg: rgba(239,68,68,0.12);
-  }
-  html,body{ background: var(--bg); }
-  body{ font-family: 'Space Grotesk', sans-serif; }
-  .mono{ font-family: 'JetBrains Mono', monospace; }
- 
-  .paper-rail{
-    position: relative;
-    height: 6px;
-    background: repeating-linear-gradient(
-      90deg,
-      var(--hairline) 0px, var(--hairline) 1px,
-      transparent 1px, transparent 24px
-    );
-    border-radius: 2px;
-  }
-  .carriage{
-    position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 10px;
-    height: 10px;
-    background: var(--brass);
-    border-radius: 2px;
-    box-shadow: 0 0 0 4px rgba(217,164,65,0.15), 0 0 14px rgba(217,164,65,0.5);
-    transition: left 120ms ease-out;
-  }
- 
-  .char-pending{ color: var(--muted); }
-  .char-correct{ color: var(--ink); }
-  .char-incorrect{ color: var(--bad); background: var(--bad-bg); border-radius: 2px; }
-  .char-current{ position: relative; }
-  .char-current::before{
-    content: '';
-    position: absolute;
-    left: -1px; top: -2px; bottom: -2px;
-    width: 2px;
-    background: var(--brass);
-    animation: blink 1s step-start infinite;
-  }
-  @keyframes blink{ 50% { opacity: 0; } }
- 
-  .key-hint{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    border: 1px solid var(--hairline);
-    background: var(--card-2);
-    color: var(--muted);
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
- 
-  .time-pill{
-    transition: all 150ms ease;
-  }
-  .time-pill.active{
-    background: var(--brass);
-    color: #14161a;
-    font-weight: 600;
-  }
- 
-  .fade-in{ animation: fadeIn 320ms ease both; }
-  @keyframes fadeIn{ from{ opacity:0; transform: translateY(6px);} to{opacity:1; transform: translateY(0);} }
- 
-  ::selection{ background: rgba(217,164,65,0.35); }
- 
-  /* Fight scene */
-  .stick{
-    fill: none;
-    stroke: #9aa0aa;
-    stroke-width: 4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
- 
-  /* -- sword frame -- */
-  #swordArm{
-    transform-origin: 80px 100px;
-    transform: rotate(18deg);
-    opacity: 1;
-  }
-  #attacker.atk-punch #swordArm{ opacity: 0; }
-  #attacker.atk-sword #swordArm{
-    animation: swordSwing 260ms cubic-bezier(.2,.7,.3,1) 1;
-  }
-  @keyframes swordSwing{
-    0%   { transform: rotate(18deg); }
-    45%  { transform: rotate(-52deg); }
-    70%  { transform: rotate(-38deg); }
-    100% { transform: rotate(18deg); }
-  }
- 
-  /* -- punch frame -- */
-  #punchArm{ opacity: 0; }
-  #attacker.atk-punch #punchArm{
-    animation: punchJab 220ms ease-out 1;
-  }
-  @keyframes punchJab{
-    0%   { opacity: 0; transform: translateX(0); }
-    25%  { opacity: 1; transform: translateX(0); }
-    55%  { opacity: 1; transform: translateX(26px); }
-    100% { opacity: 0; transform: translateX(4px); }
-  }
- 
-  /* -- kick frame -- */
-  #frontLegStatic{ opacity: 1; }
-  #attacker.atk-kick #frontLegStatic{ opacity: 0; }
-  #kickLeg{ opacity: 0; transform-origin: 80px 140px; }
-  #attacker.atk-kick #kickLeg{
-    animation: kickSwing 240ms ease-out 1;
-  }
-  @keyframes kickSwing{
-    0%   { opacity: 0; transform: rotate(0deg); }
-    20%  { opacity: 1; transform: rotate(0deg); }
-    55%  { opacity: 1; transform: rotate(-72deg); }
-    100% { opacity: 0; transform: rotate(-6deg); }
-  }
- 
-  /* -- shared lunge + miss -- */
-  #attacker.lunge{ animation: lunge 260ms ease 1; }
-  @keyframes lunge{
-    0%{ transform: translateX(0); }
-    40%{ transform: translateX(9px); }
-    100%{ transform: translateX(0); }
-  }
-  #attacker.whiff{ animation: whiffShake 200ms ease 1; }
-  @keyframes whiffShake{
-    0%{ transform: translateX(0) rotate(0); }
-    30%{ transform: translateX(-4px) rotate(-3deg); }
-    65%{ transform: translateX(3px) rotate(2deg); }
-    100%{ transform: translateX(0) rotate(0); }
-  }
- 
-  /* -- defender reaction, knockback distance scales with combo via --kb -- */
-  #defender{ transform-origin: 240px 140px; --kb: 16px; }
-  #defender.hit{ animation: flinch 300ms ease 1; }
-  #defender.hit .stick{ stroke: var(--bad); }
-  @keyframes flinch{
-    0%{ transform: translate(0,0) rotate(0); }
-    30%{ transform: translate(var(--kb),-2px) rotate(7deg); }
-    60%{ transform: translate(calc(var(--kb) * -0.15),0) rotate(-2deg); }
-    100%{ transform: translate(0,0) rotate(0); }
-  }
- 
-  #spark{ opacity: 0; transform-origin: 195px 96px; }
-  #spark.spark-show{ animation: sparkPop 260ms ease-out 1; }
-  @keyframes sparkPop{
-    0%{ opacity: 0; transform: scale(0.4) rotate(0deg); }
-    30%{ opacity: 1; transform: scale(1.1) rotate(10deg); }
-    100%{ opacity: 0; transform: scale(1.5) rotate(20deg); }
-  }
- 
-  /* combo status pill */
-  #comboBadge{
-    transition: opacity 150ms ease, transform 150ms ease;
-    letter-spacing: 0.08em;
-  }
-  #comboBadge.hidden-badge{ opacity: 0; transform: translateY(-3px); }
- 
-  @media (prefers-reduced-motion: reduce){
-    .carriage{ transition: none; }
-    .char-current::before{ animation: none; }
-    .fade-in{ animation: none; }
-    #attacker.atk-sword #swordArm,
-    #attacker.atk-punch #punchArm,
-    #attacker.atk-kick #kickLeg,
-    #attacker.lunge, #attacker.whiff, #defender.hit, #spark.spark-show{ animation: none; }
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Typecast — Typing Speed Test</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Custom Stylesheet link -->
+  <link rel="stylesheet" href="style.css">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body class="min-h-screen text-[var(--ink)] flex flex-col items-center px-4 py-10 md:py-16">
  
@@ -431,13 +254,8 @@ const ATTACK_DURATIONS = { sword: 260, punch: 220, kick: 240 };
  
 /* ---------------------------------------------------------
    FIGHT SCENE
-   Every correctly typed character lands a hit (per letter, not
-   per word). Hits cycle through a 3-frame combo — sword, punch,
-   kick — and knockback distance grows with the current streak.
-   A miss (wrong key) breaks the combo and the attacker whiffs.
 --------------------------------------------------------- */
 function pulse(elm, cls){
-  // remove, force reflow, re-add — lets the animation restart on rapid re-triggers
   elm.classList.remove(cls);
   void elm.getBoundingClientRect();
   elm.classList.add(cls);
@@ -448,7 +266,6 @@ function setAttackFrame(type){
   el.attacker.classList.remove('atk-sword', 'atk-punch', 'atk-kick');
   void el.attacker.getBoundingClientRect();
   el.attacker.classList.add('atk-' + type);
-  // revert to idle sword stance once the frame finishes, even if no next key arrives
   attackTimeout = setTimeout(() => {
     el.attacker.classList.remove('atk-' + type);
   }, ATTACK_DURATIONS[type] + 40);
@@ -493,7 +310,7 @@ function renderTimePills(){
     btn.className = "time-pill px-3 py-1.5 rounded-md border border-[var(--hairline)] text-[var(--muted)]" +
       (t === state.selectedTime ? " active" : "");
     btn.addEventListener('click', () => {
-      if (state.started && !state.finished) return; // don't allow mid-test switch
+      if (state.started && !state.finished) return; 
       state.selectedTime = t;
       resetTest();
     });
@@ -528,7 +345,6 @@ function updateCurrentCharMarker(){
   Array.from(spans).forEach(s => s.classList.remove('char-current'));
   if (spans[idx]) spans[idx].classList.add('char-current');
  
-  // move carriage along the rail based on progress
   const pct = state.currentText.length ? (idx / state.currentText.length) * 100 : 0;
   el.carriage.style.left = pct + "%";
 }
@@ -550,12 +366,10 @@ function startTimer(){
  
 /* ---------------------------------------------------------
    METRICS
-   WPM = (total characters typed / 5) / (time elapsed in minutes)
-   Accuracy = (correct characters / total typed characters) * 100
 --------------------------------------------------------- */
 function computeElapsedMinutes(){
   const elapsedSeconds = state.selectedTime - state.timeLeft;
-  return Math.max(elapsedSeconds, 1) / 60; // avoid divide-by-zero on the very first tick
+  return Math.max(elapsedSeconds, 1) / 60; 
 }
  
 function updateLiveStats(){
@@ -574,7 +388,6 @@ function updateLiveStats(){
 function handleKeydown(e){
   if (state.finished) return;
  
-  // Tab+Enter shortcut to restart
   if (e.key === 'Tab'){
     state.tabPressed = true;
     e.preventDefault();
@@ -602,14 +415,13 @@ function handleKeydown(e){
     return;
   }
  
-  // Ignore modifier / control keys
   if (e.key.length !== 1) return;
   e.preventDefault();
  
   if (!state.started) startTimer();
  
   const idx = state.typedChars.length;
-  if (idx >= state.currentText.length) return; // paragraph complete
+  if (idx >= state.currentText.length) return; 
  
   const expected = state.currentText[idx];
   const isCorrect = e.key === expected;
@@ -628,8 +440,6 @@ function handleKeydown(e){
   updateCurrentCharMarker();
   updateLiveStats();
  
-  // per-letter trigger: every correct keystroke lands a combo hit,
-  // every mistake breaks the combo and whiffs
   if (isCorrect){
     triggerAttack();
   } else {
@@ -719,7 +529,6 @@ document.addEventListener('click', focusInput);
 el.restartBtn.addEventListener('click', resetTest);
 el.tryAgainBtn.addEventListener('click', resetTest);
  
-// Prevent losing focus from hidden input on mobile taps
 el.hiddenInput.addEventListener('blur', () => {
   if (!state.finished) setTimeout(focusInput, 10);
 });
@@ -728,4 +537,3 @@ resetTest();
 </script>
 </body>
 </html>
- 
