@@ -24,7 +24,7 @@
   html,body{ background: var(--bg); }
   body{ font-family: 'Space Grotesk', sans-serif; }
   .mono{ font-family: 'JetBrains Mono', monospace; }
-
+ 
   .paper-rail{
     position: relative;
     height: 6px;
@@ -46,7 +46,7 @@
     box-shadow: 0 0 0 4px rgba(217,164,65,0.15), 0 0 14px rgba(217,164,65,0.5);
     transition: left 120ms ease-out;
   }
-
+ 
   .char-pending{ color: var(--muted); }
   .char-correct{ color: var(--ink); }
   .char-incorrect{ color: var(--bad); background: var(--bad-bg); border-radius: 2px; }
@@ -60,7 +60,7 @@
     animation: blink 1s step-start infinite;
   }
   @keyframes blink{ 50% { opacity: 0; } }
-
+ 
   .key-hint{
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
@@ -70,7 +70,7 @@
     padding: 2px 6px;
     border-radius: 4px;
   }
-
+ 
   .time-pill{
     transition: all 150ms ease;
   }
@@ -79,21 +79,66 @@
     color: #14161a;
     font-weight: 600;
   }
-
+ 
   .fade-in{ animation: fadeIn 320ms ease both; }
   @keyframes fadeIn{ from{ opacity:0; transform: translateY(6px);} to{opacity:1; transform: translateY(0);} }
-
+ 
   ::selection{ background: rgba(217,164,65,0.35); }
-
+ 
+  /* Fight scene */
+  .stick{
+    fill: none;
+    stroke: #9aa0aa;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  #swordArm{
+    transform-origin: 80px 100px;
+    transform: rotate(18deg);
+  }
+  #swordArm.swing{
+    animation: swordSwing 380ms cubic-bezier(.2,.7,.3,1) 1;
+  }
+  @keyframes swordSwing{
+    0%   { transform: rotate(18deg); }
+    45%  { transform: rotate(-52deg); }
+    70%  { transform: rotate(-38deg); }
+    100% { transform: rotate(18deg); }
+  }
+  #attacker.lunge{ animation: lunge 380ms ease 1; }
+  @keyframes lunge{
+    0%{ transform: translateX(0); }
+    40%{ transform: translateX(10px); }
+    100%{ transform: translateX(0); }
+  }
+  #defender{ transform-origin: 240px 140px; }
+  #defender.hit{ animation: flinch 380ms ease 1; }
+  #defender.hit .stick{ stroke: var(--bad); }
+  @keyframes flinch{
+    0%{ transform: translate(0,0) rotate(0); }
+    30%{ transform: translate(16px,-2px) rotate(7deg); }
+    60%{ transform: translate(-3px,0) rotate(-2deg); }
+    100%{ transform: translate(0,0) rotate(0); }
+  }
+  #spark{ opacity: 0; transform-origin: 195px 96px; }
+  #spark.spark-show{ animation: sparkPop 320ms ease-out 1; }
+  @keyframes sparkPop{
+    0%{ opacity: 0; transform: scale(0.4) rotate(0deg); }
+    30%{ opacity: 1; transform: scale(1.1) rotate(10deg); }
+    100%{ opacity: 0; transform: scale(1.5) rotate(20deg); }
+  }
+ 
   @media (prefers-reduced-motion: reduce){
     .carriage{ transition: none; }
     .char-current::before{ animation: none; }
     .fade-in{ animation: none; }
+    #swordArm.swing, #attacker.lunge, #defender.hit, #spark.spark-show{ animation: none; }
   }
 </style>
 </head>
 <body class="min-h-screen text-[var(--ink)] flex flex-col items-center px-4 py-10 md:py-16">
-
+ 
   <!-- Header -->
   <header class="w-full max-w-4xl flex items-center justify-between mb-10 md:mb-14">
     <div class="flex items-baseline gap-2">
@@ -104,18 +149,71 @@
       <!-- time pills injected -->
     </div>
   </header>
-
-  <!-- Main card -->
-  <main class="w-full max-w-4xl">
-
+ 
+  <!-- Main -->
+  <main class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-[300px_1fr] gap-6 md:gap-8 items-start">
+ 
+    <!-- Fight scene (left) -->
+    <section class="bg-[var(--card)] border border-[var(--hairline)] rounded-2xl p-5 md:p-6 shadow-2xl shadow-black/40 md:sticky md:top-10">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="mono text-[11px] uppercase tracking-widest text-[var(--muted)]">Duel</h2>
+        <span class="mono text-[11px] text-[var(--muted)]"><span id="hitCount" class="text-[var(--brass)] font-medium">0</span> hits landed</span>
+      </div>
+      <svg id="fightScene" viewBox="0 0 320 220" class="w-full h-auto">
+        <!-- ground -->
+        <line x1="14" y1="196" x2="306" y2="196" stroke="var(--hairline)" stroke-width="2"/>
+ 
+        <!-- attacker -->
+        <g id="attacker">
+          <g class="stick">
+            <circle cx="80" cy="66" r="13"/>
+            <line x1="80" y1="79" x2="80" y2="140"/>
+            <line x1="80" y1="140" x2="63" y2="192"/>
+            <line x1="80" y1="140" x2="94" y2="192"/>
+            <line x1="80" y1="96" x2="63" y2="115"/>
+          </g>
+          <g id="swordArm">
+            <g class="stick">
+              <line x1="80" y1="96" x2="106" y2="112"/>
+              <line x1="106" y1="112" x2="146" y2="86"/>
+              <line x1="121" y1="106" x2="131" y2="120"/>
+            </g>
+          </g>
+        </g>
+ 
+        <!-- impact spark -->
+        <g id="spark" class="stick" stroke="var(--brass)">
+          <line x1="185" y1="86" x2="205" y2="106"/>
+          <line x1="205" y1="86" x2="185" y2="106"/>
+          <line x1="195" y1="76" x2="195" y2="116"/>
+        </g>
+ 
+        <!-- defender -->
+        <g id="defender">
+          <g class="stick">
+            <circle cx="240" cy="66" r="13"/>
+            <line x1="240" y1="79" x2="240" y2="140"/>
+            <line x1="240" y1="140" x2="223" y2="192"/>
+            <line x1="240" y1="140" x2="257" y2="192"/>
+            <line x1="240" y1="96" x2="223" y2="115"/>
+            <line x1="240" y1="96" x2="257" y2="115"/>
+          </g>
+        </g>
+      </svg>
+      <p class="mono text-[11px] text-[var(--muted)] mt-3 text-center">type each word to land a hit</p>
+    </section>
+ 
+    <!-- Typing test (right) -->
+    <div class="w-full">
+ 
     <!-- Carriage rail (signature element) -->
     <div class="paper-rail mb-8">
       <div class="carriage" id="carriage" style="left:0%"></div>
     </div>
-
+ 
     <!-- Typing surface -->
     <section id="typingCard" class="bg-[var(--card)] border border-[var(--hairline)] rounded-2xl p-6 md:p-10 shadow-2xl shadow-black/40">
-
+ 
       <!-- Stat strip -->
       <div class="flex items-center justify-between mb-6 md:mb-8">
         <div class="flex items-baseline gap-1.5">
@@ -133,14 +231,14 @@
           </div>
         </div>
       </div>
-
+ 
       <!-- Text display -->
       <div class="relative">
         <p id="textDisplay" class="mono text-lg md:text-2xl leading-relaxed md:leading-loose tracking-wide select-none" style="letter-spacing:0.02em;"></p>
         <input id="hiddenInput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
           class="absolute opacity-0 pointer-events-none top-0 left-0 w-1 h-1" />
       </div>
-
+ 
       <!-- Footer controls -->
       <div class="flex items-center justify-between mt-8 pt-6 border-t border-[var(--hairline)]">
         <div class="flex items-center gap-2 text-[var(--muted)]">
@@ -154,9 +252,9 @@
           <span class="mono text-xs text-[var(--muted)] group-hover:text-[var(--brass)] transition-colors">restart</span>
         </button>
       </div>
-
+ 
     </section>
-
+ 
     <!-- Results panel -->
     <section id="resultsCard" class="hidden bg-[var(--card)] border border-[var(--hairline)] rounded-2xl p-8 md:p-12 shadow-2xl shadow-black/40 fade-in">
       <div class="flex items-center justify-between mb-8">
@@ -185,13 +283,14 @@
         Type again
       </button>
     </section>
-
+ 
+    </div>
   </main>
-
+ 
   <footer class="mt-10 mono text-[11px] text-[var(--muted)]">
     click anywhere and start typing — the clock starts on your first key
   </footer>
-
+ 
 <script>
 /* ---------------------------------------------------------
    DATA
@@ -206,10 +305,10 @@ const PARAGRAPHS = [
   "A good bridge does not announce itself, the engineer said, tapping the blueprint with one finger, it simply lets you cross without ever noticing the river was a problem at all.",
   "By the time the museum closed, only the night guard remained, walking past paintings whose colors seemed to deepen in the low light, as though the pigments had been waiting all day for someone to finally slow down and look."
 ];
-
+ 
 const TIME_OPTIONS = [15, 30, 60];
 const DEFAULT_TIME = 60;
-
+ 
 /* ---------------------------------------------------------
    STATE
 --------------------------------------------------------- */
@@ -226,7 +325,7 @@ let state = {
   totalErrors: 0,
   tabPressed: false,
 };
-
+ 
 /* ---------------------------------------------------------
    DOM REFS
 --------------------------------------------------------- */
@@ -247,8 +346,34 @@ const el = {
   finalErrors: document.getElementById('finalErrors'),
   finalChars: document.getElementById('finalChars'),
   resultMeta: document.getElementById('resultMeta'),
+  attacker: document.getElementById('attacker'),
+  swordArm: document.getElementById('swordArm'),
+  defender: document.getElementById('defender'),
+  spark: document.getElementById('spark'),
+  hitCount: document.getElementById('hitCount'),
 };
-
+ 
+let hitCount = 0;
+ 
+/* ---------------------------------------------------------
+   FIGHT SCENE
+--------------------------------------------------------- */
+function pulse(elm, cls){
+  // remove, force reflow, re-add — lets the animation restart on rapid re-triggers
+  elm.classList.remove(cls);
+  void elm.getBoundingClientRect();
+  elm.classList.add(cls);
+}
+ 
+function triggerAttack(){
+  hitCount += 1;
+  el.hitCount.textContent = hitCount;
+  pulse(el.swordArm, 'swing');
+  pulse(el.attacker, 'lunge');
+  pulse(el.defender, 'hit');
+  pulse(el.spark, 'spark-show');
+}
+ 
 /* ---------------------------------------------------------
    INIT TIME PILLS
 --------------------------------------------------------- */
@@ -267,14 +392,14 @@ function renderTimePills(){
     el.timeSelector.appendChild(btn);
   });
 }
-
+ 
 /* ---------------------------------------------------------
    TEXT RENDERING
 --------------------------------------------------------- */
 function pickParagraph(){
   return PARAGRAPHS[Math.floor(Math.random() * PARAGRAPHS.length)];
 }
-
+ 
 function renderText(){
   el.textDisplay.innerHTML = "";
   const frag = document.createDocumentFragment();
@@ -288,18 +413,18 @@ function renderText(){
   el.textDisplay.appendChild(frag);
   updateCurrentCharMarker();
 }
-
+ 
 function updateCurrentCharMarker(){
   const spans = el.textDisplay.children;
   const idx = state.typedChars.length;
   Array.from(spans).forEach(s => s.classList.remove('char-current'));
   if (spans[idx]) spans[idx].classList.add('char-current');
-
+ 
   // move carriage along the rail based on progress
   const pct = state.currentText.length ? (idx / state.currentText.length) * 100 : 0;
   el.carriage.style.left = pct + "%";
 }
-
+ 
 /* ---------------------------------------------------------
    TIMER
 --------------------------------------------------------- */
@@ -314,7 +439,7 @@ function startTimer(){
     }
   }, 1000);
 }
-
+ 
 /* ---------------------------------------------------------
    METRICS
    WPM = (total characters typed / 5) / (time elapsed in minutes)
@@ -324,7 +449,7 @@ function computeElapsedMinutes(){
   const elapsedSeconds = state.selectedTime - state.timeLeft;
   return Math.max(elapsedSeconds, 1) / 60; // avoid divide-by-zero on the very first tick
 }
-
+ 
 function updateLiveStats(){
   const minutes = computeElapsedMinutes();
   const wpm = Math.round((state.totalTyped / 5) / minutes);
@@ -334,13 +459,13 @@ function updateLiveStats(){
   el.liveWpm.textContent = isFinite(wpm) && wpm > 0 ? wpm : 0;
   el.liveAcc.textContent = acc;
 }
-
+ 
 /* ---------------------------------------------------------
    INPUT HANDLING
 --------------------------------------------------------- */
 function handleKeydown(e){
   if (state.finished) return;
-
+ 
   // Tab+Enter shortcut to restart
   if (e.key === 'Tab'){
     state.tabPressed = true;
@@ -352,7 +477,7 @@ function handleKeydown(e){
     return;
   }
   if (e.key !== 'Tab') state.tabPressed = false;
-
+ 
   if (e.key === 'Backspace'){
     e.preventDefault();
     if (state.typedChars.length > 0){
@@ -368,19 +493,19 @@ function handleKeydown(e){
     }
     return;
   }
-
+ 
   // Ignore modifier / control keys
   if (e.key.length !== 1) return;
   e.preventDefault();
-
+ 
   if (!state.started) startTimer();
-
+ 
   const idx = state.typedChars.length;
   if (idx >= state.currentText.length) return; // paragraph complete
-
+ 
   const expected = state.currentText[idx];
   const isCorrect = e.key === expected;
-
+ 
   state.typedChars.push({ char: e.key, correct: isCorrect });
   state.totalTyped += 1;
   if (isCorrect){
@@ -388,18 +513,25 @@ function handleKeydown(e){
   } else {
     state.totalErrors += 1;
   }
-
+ 
   const span = el.textDisplay.children[idx];
   span.className = isCorrect ? "char-correct" : "char-incorrect";
-
+ 
   updateCurrentCharMarker();
   updateLiveStats();
-
-  if (state.typedChars.length >= state.currentText.length){
+ 
+  // land a hit whenever a word is finished correctly: either a correct
+  // space between words, or the correct final character of the paragraph
+  const reachedEnd = state.typedChars.length >= state.currentText.length;
+  if (isCorrect && (expected === ' ' || reachedEnd)){
+    triggerAttack();
+  }
+ 
+  if (reachedEnd){
     finishTest();
   }
 }
-
+ 
 /* ---------------------------------------------------------
    FINISH / RESET
 --------------------------------------------------------- */
@@ -407,23 +539,23 @@ function finishTest(){
   if (state.finished) return;
   state.finished = true;
   clearInterval(state.timerId);
-
+ 
   const minutes = computeElapsedMinutes();
   const finalWpm = Math.round((state.totalTyped / 5) / minutes);
   const finalAcc = state.totalTyped > 0
     ? Math.round((state.totalCorrect / state.totalTyped) * 100)
     : 100;
-
+ 
   el.finalWpm.textContent = isFinite(finalWpm) && finalWpm > 0 ? finalWpm : 0;
   el.finalAcc.textContent = finalAcc;
   el.finalErrors.textContent = state.totalErrors;
   el.finalChars.textContent = state.totalTyped;
   el.resultMeta.textContent = `${state.selectedTime}s test`;
-
+ 
   el.typingCard.classList.add('hidden');
   el.resultsCard.classList.remove('hidden');
 }
-
+ 
 function resetTest(){
   clearInterval(state.timerId);
   state = {
@@ -439,24 +571,30 @@ function resetTest(){
     totalErrors: 0,
     tabPressed: false,
   };
-
+ 
   el.timerDisplay.textContent = state.timeLeft;
   el.liveWpm.textContent = 0;
   el.liveAcc.textContent = 100;
   el.carriage.style.left = "0%";
-
+ 
   el.resultsCard.classList.add('hidden');
   el.typingCard.classList.remove('hidden');
-
+ 
+  hitCount = 0;
+  el.hitCount.textContent = 0;
+  [el.swordArm, el.attacker, el.defender, el.spark].forEach(elm => {
+    elm.classList.remove('swing', 'lunge', 'hit', 'spark-show');
+  });
+ 
   renderTimePills();
   renderText();
   focusInput();
 }
-
+ 
 function focusInput(){
   el.hiddenInput.focus({ preventScroll: true });
 }
-
+ 
 /* ---------------------------------------------------------
    WIRE UP
 --------------------------------------------------------- */
@@ -464,13 +602,14 @@ document.addEventListener('keydown', handleKeydown);
 document.addEventListener('click', focusInput);
 el.restartBtn.addEventListener('click', resetTest);
 el.tryAgainBtn.addEventListener('click', resetTest);
-
+ 
 // Prevent losing focus from hidden input on mobile taps
 el.hiddenInput.addEventListener('blur', () => {
   if (!state.finished) setTimeout(focusInput, 10);
 });
-
+ 
 resetTest();
 </script>
 </body>
 </html>
+ 
