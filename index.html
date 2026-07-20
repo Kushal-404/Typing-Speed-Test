@@ -34,70 +34,68 @@
         <h2 class="mono text-[11px] uppercase tracking-widest text-[var(--muted)]">Duel</h2>
         <span class="mono text-[11px] text-[var(--muted)]"><span id="hitCount" class="text-[var(--brass)] font-medium">0</span> hits landed</span>
       </div>
-      <svg id="fightScene" viewBox="0 0 320 220" class="w-full h-auto">
-        <!-- ground -->
-        <line x1="14" y1="196" x2="306" y2="196" stroke="var(--hairline)" stroke-width="2"/>
- 
-        <!-- attacker -->
-        <g id="attacker">
-          <g class="stick">
-            <circle cx="80" cy="66" r="13"/>
-            <line x1="80" y1="79" x2="80" y2="140"/>
-            <line x1="80" y1="140" x2="63" y2="192"/>
-            <line x1="80" y1="96" x2="63" y2="115"/>
-          </g>
-          <g id="frontLegStatic" class="stick">
-            <line x1="80" y1="140" x2="94" y2="192"/>
-          </g>
-          <g id="kickLeg" class="stick">
-            <line x1="80" y1="140" x2="94" y2="192"/>
-          </g>
-          <g id="swordArm">
-            <g class="stick">
-              <line x1="80" y1="96" x2="106" y2="112"/>
-              <line x1="106" y1="112" x2="146" y2="86"/>
-              <line x1="121" y1="106" x2="131" y2="120"/>
-            </g>
-          </g>
-          <g id="punchArm" class="stick">
-            <line x1="80" y1="96" x2="114" y2="96"/>
-            <circle cx="114" cy="96" r="4"/>
-          </g>
-        </g>
- 
-        <!-- impact spark -->
-        <g id="spark" class="stick" stroke="var(--brass)">
-          <line x1="185" y1="86" x2="205" y2="106"/>
-          <line x1="205" y1="86" x2="185" y2="106"/>
-          <line x1="195" y1="76" x2="195" y2="116"/>
-        </g>
- 
-        <!-- defender -->
-        <g id="defender">
-          <g class="stick">
-            <circle cx="240" cy="66" r="13"/>
-            <line x1="240" y1="79" x2="240" y2="140"/>
-            <line x1="240" y1="140" x2="223" y2="192"/>
-            <line x1="240" y1="140" x2="257" y2="192"/>
-            <line x1="240" y1="96" x2="223" y2="115"/>
-            <line x1="240" y1="96" x2="257" y2="115"/>
-          </g>
-        </g>
-      </svg>
+      
+      <!-- Container -->
+      <div id="duelContainer" class="relative w-full aspect-[320/220] overflow-hidden border-b-2 border-[var(--hairline)]">
+        
+        <!-- The Ground Line -->
+        <div class="absolute bottom-0 left-0 w-full h-[2px] bg-[var(--hairline)]"></div>
+
+        <!-- Horizontal stage tracker wrapper -->
+        <div id="stageWrapper" class="absolute inset-0 transition-transform duration-200 ease-out" style="transform: translateX(0px);">
+          
+          <!-- Attacker -->
+          <div id="attacker" class="stickman" style="left: 60px;">
+            <div class="torso">
+              <div class="neck-joint">
+                <div class="head"></div>
+              </div>
+              <div class="arm left"><div class="lower"></div></div>
+              <div class="arm right">
+                <div class="lower">
+                  <div id="sword" class="sword"></div>
+                </div>
+              </div>
+            </div>
+            <div class="leg left"><div class="lower"></div></div>
+            <div class="leg right"><div class="lower"></div></div>
+          </div>
+
+          <!-- Defender -->
+          <div id="defender" class="stickman" style="left: 180px;">
+            <div class="torso">
+              <div class="neck-joint">
+                <div class="head"></div>
+              </div>
+              <div class="arm left"><div class="lower"></div></div>
+              <div class="arm right"><div class="lower"></div></div>
+            </div>
+            <div class="leg left"><div class="lower"></div></div>
+            <div class="leg right"><div class="lower"></div></div>
+          </div>
+          
+          <!-- Impact VFX Spark overlay -->
+          <div id="spark" class="spark-vfx">
+            <div class="line"></div><div class="line"></div>
+            <div class="line"></div><div class="line"></div>
+          </div>
+
+        </div> 
+      </div>
  
       <div class="flex items-center justify-between mt-3">
-        <p class="mono text-[11px] text-[var(--muted)]">type each letter to attack</p>
+        <p class="mono text-[11px] text-[var(--muted)]">type fast to push forward</p>
         <span class="mono text-[11px] text-[var(--muted)]">combo <span id="comboCount" class="text-[var(--ink)] font-medium">0</span></span>
       </div>
       <div id="comboBadge" class="hidden-badge mt-3 text-center mono text-[10px] font-semibold text-[var(--brass)] bg-[rgba(217,164,65,0.1)] border border-[rgba(217,164,65,0.35)] rounded-md py-1.5">
-        MULTI-FRAME COMBO ACTIVE
+        MAX MOMENTUM ACTIVE
       </div>
     </section>
  
     <!-- Typing test (right) -->
     <div class="w-full">
  
-    <!-- Carriage rail (signature element) -->
+    <!-- Carriage rail -->
     <div class="paper-rail mb-8">
       <div class="carriage" id="carriage" style="left:0%"></div>
     </div>
@@ -210,7 +208,7 @@ let state = {
   started: false,
   finished: false,
   currentText: "",
-  typedChars: [],      // array of {char, correct: true|false|null}
+  typedChars: [], 
   totalTyped: 0,
   totalCorrect: 0,
   totalErrors: 0,
@@ -237,9 +235,12 @@ const el = {
   finalErrors: document.getElementById('finalErrors'),
   finalChars: document.getElementById('finalChars'),
   resultMeta: document.getElementById('resultMeta'),
+  
   attacker: document.getElementById('attacker'),
-  swordArm: document.getElementById('swordArm'),
   defender: document.getElementById('defender'),
+  sword: document.getElementById('sword'),
+  stageWrapper: document.getElementById('stageWrapper'),
+  duelContainer: document.getElementById('duelContainer'),
   spark: document.getElementById('spark'),
   hitCount: document.getElementById('hitCount'),
   comboCount: document.getElementById('comboCount'),
@@ -248,59 +249,98 @@ const el = {
  
 let hitCount = 0;
 let combo = 0;
-let attackTimeout = null;
-const ATTACK_TYPES = ['sword', 'punch', 'kick'];
-const ATTACK_DURATIONS = { sword: 260, punch: 220, kick: 240 };
+let actionTimeout = null;
+
+const ATTACK_TYPES = ['atk-punch', 'atk-kick', 'atk-slash'];
+const ATTACK_DURATIONS = { 'atk-punch': 150, 'atk-kick': 200, 'atk-slash': 180 }; // Accelerated snap durations
  
 /* ---------------------------------------------------------
-   FIGHT SCENE
+   COMBAT ENGINE
 --------------------------------------------------------- */
 function pulse(elm, cls){
   elm.classList.remove(cls);
-  void elm.getBoundingClientRect();
+  void elm.getBoundingClientRect(); 
   elm.classList.add(cls);
 }
- 
-function setAttackFrame(type){
-  clearTimeout(attackTimeout);
-  el.attacker.classList.remove('atk-sword', 'atk-punch', 'atk-kick');
-  void el.attacker.getBoundingClientRect();
-  el.attacker.classList.add('atk-' + type);
-  attackTimeout = setTimeout(() => {
-    el.attacker.classList.remove('atk-' + type);
-  }, ATTACK_DURATIONS[type] + 40);
+
+function positionSpark() {
+  const atkX = parseFloat(el.attacker.style.left);
+  const defX = parseFloat(el.defender.style.left);
+  const impactX = atkX + (defX - atkX) * 0.65;
+  const impactY = 75; // Aligned with the new extended chest height
+  
+  el.spark.style.left = impactX + 'px';
+  el.spark.style.bottom = impactY + 'px';
 }
- 
-function updateComboBadge(){
-  el.comboBadge.classList.toggle('hidden-badge', combo < 5);
-}
- 
+
 function triggerAttack(){
   hitCount += 1;
   combo += 1;
   el.hitCount.textContent = hitCount;
   el.comboCount.textContent = combo;
-  updateComboBadge();
- 
+  el.comboBadge.classList.toggle('hidden-badge', combo < 8);
+  
   const type = ATTACK_TYPES[hitCount % ATTACK_TYPES.length];
-  setAttackFrame(type);
-  pulse(el.attacker, 'lunge');
+  
+  clearTimeout(actionTimeout);
+  // Strip active frames down to process incoming hit instantly
+  el.attacker.classList.remove(...ATTACK_TYPES);
+  pulse(el.attacker, type);
+  
+  const kb = Math.min(combo * 0.9, 16); 
+  el.defender.style.setProperty('--kb', kb + 'px');
+  pulse(el.defender, 'state-hit');
+  
+  positionSpark();
   pulse(el.spark, 'spark-show');
- 
-  const knockback = Math.min(12 + combo * 1.6, 34);
-  el.defender.style.setProperty('--kb', knockback.toFixed(1) + 'px');
-  pulse(el.defender, 'hit');
+
+  actionTimeout = setTimeout(() => {
+    el.attacker.classList.remove(type);
+  }, ATTACK_DURATIONS[type]);
 }
  
 function triggerMiss(){
   combo = 0;
   el.comboCount.textContent = 0;
-  updateComboBadge();
-  pulse(el.attacker, 'whiff');
+  el.comboBadge.classList.add('hidden-badge');
+  clearTimeout(actionTimeout);
+  el.attacker.classList.remove(...ATTACK_TYPES);
+  pulse(el.attacker, 'state-miss');
+  pulse(el.defender, 'state-gloat');
+
+  actionTimeout = setTimeout(() => {
+    el.attacker.classList.remove('state-miss');
+  }, 250);
+}
+
+function updateStageProgression(idx, total) {
+    if (total === 0) return;
+    const progressPct = idx / total;
+
+    el.carriage.style.left = (progressPct * 100) + "%";
+
+    const stageWidth = el.duelContainer.offsetWidth;
+    const startX = 50; 
+    const gap = 100; 
+    
+    const totalMoveDist = stageWidth - gap - (startX * 2);
+    
+    const currentAtkX = startX + (totalMoveDist * progressPct);
+    const currentDefX = currentAtkX + gap;
+
+    el.attacker.style.left = currentAtkX + 'px';
+    el.defender.style.left = currentDefX + 'px';
+
+    if (currentAtkX > stageWidth * 0.5) {
+        const cameraOffset = (stageWidth * 0.5) - currentAtkX;
+        el.stageWrapper.style.transform = `translateX(${cameraOffset}px)`;
+    } else {
+        el.stageWrapper.style.transform = `translateX(0px)`;
+    }
 }
  
 /* ---------------------------------------------------------
-   INIT TIME PILLS
+   CORE LOGIC & HOOKS
 --------------------------------------------------------- */
 function renderTimePills(){
   el.timeSelector.innerHTML = "";
@@ -318,9 +358,6 @@ function renderTimePills(){
   });
 }
  
-/* ---------------------------------------------------------
-   TEXT RENDERING
---------------------------------------------------------- */
 function pickParagraph(){
   return PARAGRAPHS[Math.floor(Math.random() * PARAGRAPHS.length)];
 }
@@ -344,14 +381,10 @@ function updateCurrentCharMarker(){
   const idx = state.typedChars.length;
   Array.from(spans).forEach(s => s.classList.remove('char-current'));
   if (spans[idx]) spans[idx].classList.add('char-current');
- 
-  const pct = state.currentText.length ? (idx / state.currentText.length) * 100 : 0;
-  el.carriage.style.left = pct + "%";
+  
+  updateStageProgression(idx, state.currentText.length);
 }
  
-/* ---------------------------------------------------------
-   TIMER
---------------------------------------------------------- */
 function startTimer(){
   state.started = true;
   state.timerId = setInterval(() => {
@@ -364,9 +397,6 @@ function startTimer(){
   }, 1000);
 }
  
-/* ---------------------------------------------------------
-   METRICS
---------------------------------------------------------- */
 function computeElapsedMinutes(){
   const elapsedSeconds = state.selectedTime - state.timeLeft;
   return Math.max(elapsedSeconds, 1) / 60; 
@@ -382,9 +412,6 @@ function updateLiveStats(){
   el.liveAcc.textContent = acc;
 }
  
-/* ---------------------------------------------------------
-   INPUT HANDLING
---------------------------------------------------------- */
 function handleKeydown(e){
   if (state.finished) return;
  
@@ -452,13 +479,14 @@ function handleKeydown(e){
   }
 }
  
-/* ---------------------------------------------------------
-   FINISH / RESET
---------------------------------------------------------- */
 function finishTest(){
   if (state.finished) return;
   state.finished = true;
   clearInterval(state.timerId);
+  
+  clearTimeout(actionTimeout);
+  el.attacker.classList.remove(...ATTACK_TYPES, 'state-miss');
+  el.defender.classList.remove('state-hit', 'state-gloat');
  
   const minutes = computeElapsedMinutes();
   const finalWpm = Math.round((state.totalTyped / 5) / minutes);
@@ -502,15 +530,19 @@ function resetTest(){
  
   hitCount = 0;
   combo = 0;
-  clearTimeout(attackTimeout);
+  clearTimeout(actionTimeout);
   el.hitCount.textContent = 0;
   el.comboCount.textContent = 0;
   el.comboBadge.classList.add('hidden-badge');
-  el.defender.style.setProperty('--kb', '16px');
-  el.attacker.classList.remove('atk-sword', 'atk-punch', 'atk-kick', 'lunge', 'whiff');
-  [el.defender, el.spark].forEach(elm => {
-    elm.classList.remove('hit', 'spark-show');
-  });
+  
+  el.stageWrapper.style.transform = `translateX(0px)`;
+  el.attacker.style.left = '60px';
+  el.defender.style.left = '180px';
+  el.defender.style.setProperty('--kb', '0px');
+  
+  el.attacker.classList.remove('state-miss', ...ATTACK_TYPES);
+  el.defender.classList.remove('state-hit', 'state-gloat');
+  el.spark.classList.remove('spark-show');
  
   renderTimePills();
   renderText();
