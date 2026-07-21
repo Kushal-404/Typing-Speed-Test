@@ -79,6 +79,17 @@ body { font-family: 'Space Grotesk', sans-serif; }
   border-radius: 8px;
 }
 
+/* Defender's whole rig is wrapped and mirrored so the sword, arms, and
+   stance all face the attacker instead of facing the same way as it.
+   Kept as an inner wrapper (not on #defender itself) so it doesn't
+   collide with the hit-flinch translateX/rotate animation on #defender. */
+.mirror-body {
+  position: absolute;
+  width: 2px; height: 2px;
+  left: 0px; bottom: 0px;
+  transform: scaleX(-1);
+}
+
 .stickman {
   position: absolute;
   bottom: 0px; /* Locked flush to ground level */
@@ -197,37 +208,42 @@ body { font-family: 'Space Grotesk', sans-serif; }
    INSTANT combat frames (Leg animations trigger ONLY here)
 --------------------------------------------------------- */
 
-/* -- ATTACK 1: PUNCH JAB -- */
-.atk-punch .torso { transform: rotate(18deg); }
-/* Front leg braces down forward */
-.atk-punch .leg.right { transform: rotate(42deg); }
-.atk-punch .leg.right .lower { transform: rotate(8deg); }
-/* Back leg extensions stretch */
-.atk-punch .leg.left { transform: rotate(-45deg); }
-.atk-punch .leg.left .lower { transform: rotate(12deg); }
-/* Attack execution arm */
-.atk-punch .arm.left { animation: snapPunch 0.15s cubic-bezier(0.1, 0.9, 0.2, 1); }
-@keyframes snapPunch {
-  0%, 100% { transform: rotate(30deg); }
-  40% { transform: rotate(-85deg); }
+/* -- ATTACK 1: THRUST LUNGE -- */
+.atk-thrust .torso { transform: rotate(10deg); }
+/* Front leg drives forward into the lunge */
+.atk-thrust .leg.right { transform: rotate(48deg); }
+.atk-thrust .leg.right .lower { transform: rotate(10deg); }
+/* Back leg stretches out behind */
+.atk-thrust .leg.left { transform: rotate(-50deg); }
+.atk-thrust .leg.left .lower { transform: rotate(15deg); }
+/* Blade snaps straight out and back */
+.atk-thrust .arm.right { animation: thrustArm 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.atk-thrust .sword { animation: thrustSword 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes thrustArm {
+  0%, 100% { transform: rotate(-20deg); }
+  45% { transform: rotate(-55deg); }
+}
+@keyframes thrustSword {
+  0%, 100% { transform: rotate(-105deg); }
+  45% { transform: rotate(-95deg); } /* straightens toward the target */
 }
 
-/* -- ATTACK 2: SNAP KICK -- */
-.atk-kick .torso { transform: rotate(-15deg); }
-/* Bracing support leg bends deep into ground */
-.atk-kick .leg.left { transform: rotate(-20deg); }
-.atk-kick .leg.left .lower { transform: rotate(65deg); }
-/* Active kick leg fires outward */
-.atk-kick .leg.right { animation: snapKickUpper 0.2s cubic-bezier(0.1, 0.9, 0.2, 1); }
-.atk-kick .leg.right .lower { animation: snapKickLower 0.2s cubic-bezier(0.1, 0.9, 0.2, 1); }
-@keyframes snapKickUpper {
-  0%, 100% { transform: rotate(26deg); }
-  45% { transform: rotate(-65deg); }
+/* -- ATTACK 2: CROSS SLASH -- */
+.atk-crosscut .torso { transform: rotate(-8deg); }
+.atk-crosscut .leg.right { transform: rotate(40deg); }
+.atk-crosscut .leg.right .lower { transform: rotate(10deg); }
+.atk-crosscut .leg.left { transform: rotate(-40deg); }
+.atk-crosscut .leg.left .lower { transform: rotate(20deg); }
+/* Blade sweeps sideways across the body */
+.atk-crosscut .arm.right { animation: crossArm 0.18s ease-out; }
+.atk-crosscut .sword { animation: crossSword 0.18s ease-out; }
+@keyframes crossArm {
+  0%, 100% { transform: rotate(-20deg); }
+  50% { transform: rotate(55deg); }
 }
-@keyframes snapKickLower {
-  0%, 100% { transform: rotate(15deg); }
-  25% { transform: rotate(70deg); }
-  45% { transform: rotate(-5deg); }
+@keyframes crossSword {
+  0%, 100% { transform: rotate(-105deg); }
+  50% { transform: rotate(-15deg); }
 }
 
 /* -- ATTACK 3: LUNGE OVERHEAD SLASH -- */
@@ -243,6 +259,14 @@ body { font-family: 'Space Grotesk', sans-serif; }
 @keyframes slashArmU { 0%, 100% { transform: rotate(-20deg); } 35% { transform: rotate(-110deg); } }
 @keyframes slashSwordW { 0%, 100% { transform: rotate(-105deg); } 35% { transform: rotate(-25deg); } 65% { transform: rotate(-140deg); } }
 
+/* -- FOOTWORK: a quick forward step on every attack, echoing the
+   reference clip's constant closing-the-distance footwork -- */
+#attacker.lunge-step { animation: lungeStep 0.16s ease-out; }
+@keyframes lungeStep {
+  0%, 100% { transform: translateX(0); }
+  45% { transform: translateX(8px); }
+}
+
 /* -- HIT REACTION (Defender) -- */
 #defender.state-hit { animation: rapidFlinch 0.2s ease-out; }
 #defender.state-hit div { border-color: var(--bad); background-color: var(--bad); }
@@ -257,6 +281,15 @@ body { font-family: 'Space Grotesk', sans-serif; }
 @keyframes missTilt { 0%, 100% { transform: rotate(0); } 40% { transform: rotate(25deg); } }
 .state-gloat .torso { animation: laughHop 0.2s ease alternate infinite; }
 @keyframes laughHop { 0% { transform: translateY(0); } 100% { transform: translateY(-3px) rotate(-4deg); } }
+
+/* -- FINISH: blades-locked freeze pose, echoing the reference clip's
+   ending. Shared rule so both fighters use identical numbers — the
+   defender's .mirror-body flips it into the correct facing pose. -- */
+.stickman.pose-clash .torso { transform: rotate(20deg); }
+.stickman.pose-clash .arm.right { transform: rotate(-70deg); }
+.stickman.pose-clash .sword { transform: rotate(-60deg); }
+.stickman.pose-clash .leg.right { transform: rotate(45deg); }
+.stickman.pose-clash .leg.left { transform: rotate(-40deg); }
 
 /* VFX Spark system */
 .spark-vfx { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
