@@ -68,8 +68,8 @@ let hitCount = 0;
 let combo = 0;
 let actionTimeout = null;
 
-const ATTACK_TYPES = ['atk-thrust', 'atk-crosscut', 'atk-slash'];
-const ATTACK_DURATIONS = { 'atk-thrust': 160, 'atk-crosscut': 180, 'atk-slash': 180 };
+const ATTACK_TYPES = ['atk-thrust', 'atk-punch', 'atk-crosscut', 'atk-kick', 'atk-slash'];
+const ATTACK_DURATIONS = { 'atk-thrust': 160, 'atk-punch': 150, 'atk-crosscut': 180, 'atk-kick': 200, 'atk-slash': 180 };
  
 /* ---------------------------------------------------------
    COMBAT ENGINE

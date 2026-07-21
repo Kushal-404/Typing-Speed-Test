@@ -95,6 +95,18 @@ body { font-family: 'Space Grotesk', sans-serif; }
   bottom: 0px; /* Locked flush to ground level */
   width: 2px; height: 2px;
   transition: left 200ms ease-out;
+  /* idle "alive" breathing bob — any triggered animation (lunge-step,
+     state-hit) wins automatically via higher selector specificity,
+     since both target #attacker/#defender directly */
+  animation: idleBob 2.4s ease-in-out infinite;
+}
+#defender { animation-delay: -1.1s; } /* out of phase so they don't bob in lockstep */
+@keyframes idleBob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-2px) rotate(1deg); }
+}
+.stickman.pose-clash {
+  animation: none; /* freeze completely for the finishing pose */
 }
 
 .stickman div {
@@ -139,7 +151,13 @@ body { font-family: 'Space Grotesk', sans-serif; }
   bottom: 0px;        /* Fixed down directly into the neck joint point */
   left: -11px;
   transform-origin: 50% 50%;
+  animation: headIdle 3.1s ease-in-out infinite;
 }
+@keyframes headIdle {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-3deg); }
+}
+.stickman.pose-clash .head { animation: none; }
 
 /* -- Leg Architecture (Lengthened to fix dimensions) -- */
 .stickman .leg {
@@ -186,17 +204,45 @@ body { font-family: 'Space Grotesk', sans-serif; }
 
 .stickman .arm.right { transform: rotate(-20deg); }
 .stickman .arm.right .lower { transform: rotate(35deg); }
-.stickman .arm.left { transform: rotate(30deg); }
-.stickman .arm.left .lower { transform: rotate(40deg); }
 
-/* Weapon Geometry */
+/* Off-hand: was completely static before (no idle motion, no per-attack
+   animation) — that's why it read as dead. Now it sways at rest and
+   the .lower segment gets its own slightly-offset idle wobble for a
+   looser, less rigid hang. Any atk-* override below wins via source
+   order (same specificity, declared later in the file). */
+.stickman .arm.left { animation: offHandIdle 2.1s ease-in-out infinite; }
+.stickman .arm.left .lower { animation: offHandIdleLower 2.1s ease-in-out infinite; }
+@keyframes offHandIdle {
+  0%, 100% { transform: rotate(30deg); }
+  50% { transform: rotate(20deg); }
+}
+@keyframes offHandIdleLower {
+  0%, 100% { transform: rotate(40deg); }
+  50% { transform: rotate(48deg); }
+}
+.stickman.pose-clash .arm.left { animation: none; transform: rotate(60deg); }
+.stickman.pose-clash .arm.left .lower { animation: none; transform: rotate(30deg); }
+
+/* Weapon Geometry.
+   Composed rest angle = arm.right(-20) + arm.right .lower(35) + sword's
+   own rotation. -150 here gives -135 total: a 45-degree UP-diagonal
+   guard angle (0/-90/-180 land straight-down/horizontal/straight-up,
+   so -135 sits halfway between horizontal and straight up). The idle
+   sway keyframes below replace the old static transform — any atk-*
+   class still wins instantly because a descendant selector like
+   `.atk-slash .sword` has higher specificity than the bare `.sword`
+   rule, so swings are completely unaffected by this. */
 .sword {
   width: 3px !important; height: 58px;
   background-color: #cdd !important;
   top: 12px; left: 0px;
-  transform: rotate(-105deg);
   transform-origin: 50% 6px;
   box-shadow: 0 0 8px rgba(200,220,220, 0.4);
+  animation: swordIdleSway 1.9s ease-in-out infinite;
+}
+@keyframes swordIdleSway {
+  0%, 100% { transform: rotate(-150deg); }
+  50% { transform: rotate(-142deg); }
 }
 .sword::after {
   content: ''; position: absolute;
@@ -219,16 +265,37 @@ body { font-family: 'Space Grotesk', sans-serif; }
 /* Blade snaps straight out and back */
 .atk-thrust .arm.right { animation: thrustArm 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .atk-thrust .sword { animation: thrustSword 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+/* Off-hand counterbalances the lunge, pulling back sharply */
+.atk-thrust .arm.left { animation: offHandThrust 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
 @keyframes thrustArm {
   0%, 100% { transform: rotate(-20deg); }
   45% { transform: rotate(-55deg); }
 }
 @keyframes thrustSword {
-  0%, 100% { transform: rotate(-105deg); }
-  45% { transform: rotate(-95deg); } /* straightens toward the target */
+  0%, 100% { transform: rotate(-150deg); }
+  45% { transform: rotate(-140deg); } /* straightens toward the target */
+}
+@keyframes offHandThrust {
+  0%, 100% { transform: rotate(30deg); }
+  45% { transform: rotate(-25deg); }
 }
 
-/* -- ATTACK 2: CROSS SLASH -- */
+/* -- ATTACK 2: PUNCH JAB (off-hand — the sword stays gripped and ready) -- */
+.atk-punch .torso { transform: rotate(18deg); }
+/* Front leg braces down forward */
+.atk-punch .leg.right { transform: rotate(42deg); }
+.atk-punch .leg.right .lower { transform: rotate(8deg); }
+/* Back leg extends and stretches */
+.atk-punch .leg.left { transform: rotate(-45deg); }
+.atk-punch .leg.left .lower { transform: rotate(12deg); }
+/* Free hand throws the jab */
+.atk-punch .arm.left { animation: snapPunch 0.15s cubic-bezier(0.1, 0.9, 0.2, 1); }
+@keyframes snapPunch {
+  0%, 100% { transform: rotate(30deg); }
+  40% { transform: rotate(-85deg); }
+}
+
+/* -- ATTACK 3: CROSS SLASH -- */
 .atk-crosscut .torso { transform: rotate(-8deg); }
 .atk-crosscut .leg.right { transform: rotate(40deg); }
 .atk-crosscut .leg.right .lower { transform: rotate(10deg); }
@@ -237,16 +304,40 @@ body { font-family: 'Space Grotesk', sans-serif; }
 /* Blade sweeps sideways across the body */
 .atk-crosscut .arm.right { animation: crossArm 0.18s ease-out; }
 .atk-crosscut .sword { animation: crossSword 0.18s ease-out; }
+/* Off-hand swings the opposite direction, countering the twist */
+.atk-crosscut .arm.left { animation: offHandCross 0.18s ease-out; }
 @keyframes crossArm {
   0%, 100% { transform: rotate(-20deg); }
   50% { transform: rotate(55deg); }
 }
 @keyframes crossSword {
-  0%, 100% { transform: rotate(-105deg); }
-  50% { transform: rotate(-15deg); }
+  0%, 100% { transform: rotate(-150deg); }
+  50% { transform: rotate(-60deg); }
+}
+@keyframes offHandCross {
+  0%, 100% { transform: rotate(30deg); }
+  50% { transform: rotate(75deg); }
 }
 
-/* -- ATTACK 3: LUNGE OVERHEAD SLASH -- */
+/* -- ATTACK 4: SNAP KICK (both hands stay on guard, legs do the work) -- */
+.atk-kick .torso { transform: rotate(-15deg); }
+/* Support leg bends deep, bracing the weight */
+.atk-kick .leg.left { transform: rotate(-20deg); }
+.atk-kick .leg.left .lower { transform: rotate(65deg); }
+/* Kicking leg fires outward */
+.atk-kick .leg.right { animation: snapKickUpper 0.2s cubic-bezier(0.1, 0.9, 0.2, 1); }
+.atk-kick .leg.right .lower { animation: snapKickLower 0.2s cubic-bezier(0.1, 0.9, 0.2, 1); }
+@keyframes snapKickUpper {
+  0%, 100% { transform: rotate(26deg); }
+  45% { transform: rotate(-65deg); }
+}
+@keyframes snapKickLower {
+  0%, 100% { transform: rotate(15deg); }
+  25% { transform: rotate(70deg); }
+  45% { transform: rotate(-5deg); }
+}
+
+/* -- ATTACK 5: LUNGE OVERHEAD SLASH -- */
 .atk-slash .torso { transform: rotate(25deg); }
 /* Maximum low step push forward */
 .atk-slash .leg.right { transform: rotate(50deg); }
@@ -256,8 +347,11 @@ body { font-family: 'Space Grotesk', sans-serif; }
 /* Weapon arc swing */
 .atk-slash .arm.right { animation: slashArmU 0.18s ease-out; }
 .atk-slash .sword { animation: slashSwordW 0.18s ease-out; }
+/* Off-hand flings back for balance during the big overhead cleave */
+.atk-slash .arm.left { animation: offHandSlash 0.18s ease-out; }
 @keyframes slashArmU { 0%, 100% { transform: rotate(-20deg); } 35% { transform: rotate(-110deg); } }
-@keyframes slashSwordW { 0%, 100% { transform: rotate(-105deg); } 35% { transform: rotate(-25deg); } 65% { transform: rotate(-140deg); } }
+@keyframes slashSwordW { 0%, 100% { transform: rotate(-150deg); } 35% { transform: rotate(-70deg); } 65% { transform: rotate(-185deg); } }
+@keyframes offHandSlash { 0%, 100% { transform: rotate(30deg); } 35% { transform: rotate(-10deg); } 65% { transform: rotate(50deg); } }
 
 /* -- FOOTWORK: a quick forward step on every attack, echoing the
    reference clip's constant closing-the-distance footwork -- */
@@ -287,7 +381,10 @@ body { font-family: 'Space Grotesk', sans-serif; }
    defender's .mirror-body flips it into the correct facing pose. -- */
 .stickman.pose-clash .torso { transform: rotate(20deg); }
 .stickman.pose-clash .arm.right { transform: rotate(-70deg); }
-.stickman.pose-clash .sword { transform: rotate(-60deg); }
+.stickman.pose-clash .sword {
+  animation: none;         /* the infinite idle sway never stops on its own — must be killed explicitly for the static angle below to take effect */
+  transform: rotate(-100deg);
+}
 .stickman.pose-clash .leg.right { transform: rotate(45deg); }
 .stickman.pose-clash .leg.left { transform: rotate(-40deg); }
 
