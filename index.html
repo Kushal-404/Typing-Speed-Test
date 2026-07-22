@@ -14,14 +14,44 @@
 </head>
 <body class="min-h-screen text-[var(--ink)] flex flex-col items-center px-4 py-10 md:py-16">
  
+  <!-- MODE SELECT SCREEN -->
+  <div id="modeSelectScreen" class="w-full max-w-3xl flex flex-col items-center text-center gap-10 py-10">
+    <div>
+      <h1 class="text-3xl md:text-4xl font-semibold tracking-tight mb-2">Typecast</h1>
+      <p class="mono text-sm text-[var(--muted)]">choose your mode</p>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full">
+      <button id="selectNormalBtn" class="mode-card">
+        <span class="mode-card-icon">⌨</span>
+        <h2>Normal Mode</h2>
+        <p>The classic typing speed test. Every correct keystroke lands a hit on your duel companion.</p>
+        <span class="mode-card-cta">Play →</span>
+      </button>
+      <button id="selectBattleBtn" class="mode-card">
+        <span class="mode-card-icon">⚔</span>
+        <h2>Battle Mode</h2>
+        <p>A new head-to-head challenge, only available here for now — still being forged.</p>
+        <span class="mode-card-cta">Play →</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- NORMAL MODE SCREEN (existing app) -->
+  <div id="normalModeScreen" class="hidden w-full flex flex-col items-center">
+
   <!-- Header -->
   <header class="w-full max-w-4xl flex items-center justify-between mb-10 md:mb-14">
     <div class="flex items-baseline gap-2">
       <h1 class="text-xl md:text-2xl font-semibold tracking-tight">Typecast</h1>
       <span class="mono text-[11px] text-[var(--muted)] hidden sm:inline">— a typing speed test</span>
     </div>
-    <div class="flex items-center gap-1 mono text-xs" id="timeSelector">
-      <!-- time pills injected -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1 mono text-xs" id="timeSelector">
+        <!-- time pills injected -->
+      </div>
+      <button id="backToMenuBtn" class="mono text-[11px] text-[var(--muted)] hover:text-[var(--brass)] border border-[var(--hairline)] hover:border-[var(--brass)] rounded-md px-2.5 py-1.5 transition-colors">
+        ← menu
+      </button>
     </div>
   </header>
  
@@ -185,6 +215,23 @@
   <footer class="mt-10 mono text-[11px] text-[var(--muted)]">
     click anywhere and start typing — the clock starts on your first key
   </footer>
+
+  </div>
+  <!-- /NORMAL MODE SCREEN -->
+
+  <!-- BATTLE MODE SCREEN (placeholder — rules not defined yet) -->
+  <div id="battleModeScreen" class="hidden w-full max-w-2xl flex flex-col items-center text-center gap-6 py-10">
+    <h1 class="text-2xl md:text-3xl font-semibold tracking-tight">Battle Mode</h1>
+    <div class="bg-[var(--card)] border border-[var(--hairline)] rounded-2xl p-10 md:p-14 w-full">
+      <p class="mono text-sm text-[var(--muted)] leading-relaxed">
+        This mode is still being forged — no rules set yet.<br>
+        Describe how it should work and it'll get built out right here.
+      </p>
+    </div>
+    <button id="backFromBattleBtn" class="mono text-xs text-[var(--muted)] hover:text-[var(--brass)] border border-[var(--hairline)] hover:border-[var(--brass)] rounded-md px-4 py-2 transition-colors">
+      ← back to menu
+    </button>
+  </div>
  
 <script src="script.js"></script>
 </body>

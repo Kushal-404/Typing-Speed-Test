@@ -18,6 +18,8 @@ const DEFAULT_TIME = 60;
 /* ---------------------------------------------------------
    STATE
 --------------------------------------------------------- */
+let currentMode = 'menu'; // 'menu' | 'normal' | 'battle'
+
 let state = {
   selectedTime: DEFAULT_TIME,
   timeLeft: DEFAULT_TIME,
@@ -62,14 +64,22 @@ const el = {
   hitCount: document.getElementById('hitCount'),
   comboCount: document.getElementById('comboCount'),
   comboBadge: document.getElementById('comboBadge'),
+
+  modeSelectScreen: document.getElementById('modeSelectScreen'),
+  normalModeScreen: document.getElementById('normalModeScreen'),
+  battleModeScreen: document.getElementById('battleModeScreen'),
+  selectNormalBtn: document.getElementById('selectNormalBtn'),
+  selectBattleBtn: document.getElementById('selectBattleBtn'),
+  backToMenuBtn: document.getElementById('backToMenuBtn'),
+  backFromBattleBtn: document.getElementById('backFromBattleBtn'),
 };
  
 let hitCount = 0;
 let combo = 0;
 let actionTimeout = null;
 
-const ATTACK_TYPES = ['atk-thrust', 'atk-punch', 'atk-crosscut', 'atk-kick', 'atk-slash'];
-const ATTACK_DURATIONS = { 'atk-thrust': 160, 'atk-punch': 150, 'atk-crosscut': 180, 'atk-kick': 200, 'atk-slash': 180 };
+const ATTACK_TYPES = ['atk-thrust', 'atk-crosscut', 'atk-kick', 'atk-slash'];
+const ATTACK_DURATIONS = { 'atk-thrust': 160, 'atk-crosscut': 180, 'atk-kick': 200, 'atk-slash': 180 };
  
 /* ---------------------------------------------------------
    COMBAT ENGINE
@@ -231,6 +241,7 @@ function updateLiveStats(){
 }
  
 function handleKeydown(e){
+  if (currentMode !== 'normal') return;
   if (state.finished) return;
  
   if (e.key === 'Tab'){
@@ -370,9 +381,37 @@ function resetTest(){
 }
  
 function focusInput(){
+  if (currentMode !== 'normal') return;
   el.hiddenInput.focus({ preventScroll: true });
 }
- 
+
+/* ---------------------------------------------------------
+   MODE SWITCHING
+--------------------------------------------------------- */
+function showScreen(mode){
+  currentMode = mode;
+  el.modeSelectScreen.classList.toggle('hidden', mode !== 'menu');
+  el.normalModeScreen.classList.toggle('hidden', mode !== 'normal');
+  el.battleModeScreen.classList.toggle('hidden', mode !== 'battle');
+}
+
+function enterNormalMode(){
+  showScreen('normal');
+  resetTest(); // fresh test + fresh duel scene every time Normal Mode is opened
+}
+
+function enterBattleMode(){
+  showScreen('battle');
+}
+
+function returnToMenu(){
+  // stop a running test/timer if leaving mid-round, so it doesn't keep
+  // ticking or firing keydown-driven combat logic in the background
+  clearInterval(state.timerId);
+  state.finished = true;
+  showScreen('menu');
+}
+
 /* ---------------------------------------------------------
    WIRE UP
 --------------------------------------------------------- */
@@ -380,9 +419,14 @@ document.addEventListener('keydown', handleKeydown);
 document.addEventListener('click', focusInput);
 el.restartBtn.addEventListener('click', resetTest);
 el.tryAgainBtn.addEventListener('click', resetTest);
- 
+
+el.selectNormalBtn.addEventListener('click', enterNormalMode);
+el.selectBattleBtn.addEventListener('click', enterBattleMode);
+el.backToMenuBtn.addEventListener('click', returnToMenu);
+el.backFromBattleBtn.addEventListener('click', returnToMenu);
+
 el.hiddenInput.addEventListener('blur', () => {
-  if (!state.finished) setTimeout(focusInput, 10);
+  if (currentMode === 'normal' && !state.finished) setTimeout(focusInput, 10);
 });
- 
-resetTest();
+
+showScreen('menu');

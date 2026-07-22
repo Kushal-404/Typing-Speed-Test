@@ -72,6 +72,51 @@ body { font-family: 'Space Grotesk', sans-serif; }
 #comboBadge.hidden-badge { opacity: 0; transform: translateY(-3px); }
 
 /* ---------------------------------------------------------
+   MODE SELECT SCREEN
+--------------------------------------------------------- */
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  padding: 32px 24px;
+  cursor: pointer;
+  transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+.mode-card:hover {
+  border-color: var(--brass);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+.mode-card-icon {
+  font-size: 28px;
+  color: var(--brass);
+  line-height: 1;
+}
+.mode-card h2 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--ink);
+}
+.mode-card p {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.mode-card-cta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--brass);
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------
    PROPORTIONAL STICKMAN ARCHITECTURE (Connected Head & Taller Profile)
 --------------------------------------------------------- */
 #duelContainer {
@@ -205,23 +250,17 @@ body { font-family: 'Space Grotesk', sans-serif; }
 .stickman .arm.right { transform: rotate(-20deg); }
 .stickman .arm.right .lower { transform: rotate(35deg); }
 
-/* Off-hand: was completely static before (no idle motion, no per-attack
-   animation) — that's why it read as dead. Now it sways at rest and
-   the .lower segment gets its own slightly-offset idle wobble for a
-   looser, less rigid hang. Any atk-* override below wins via source
-   order (same specificity, declared later in the file). */
-.stickman .arm.left { animation: offHandIdle 2.1s ease-in-out infinite; }
-.stickman .arm.left .lower { animation: offHandIdleLower 2.1s ease-in-out infinite; }
-@keyframes offHandIdle {
-  0%, 100% { transform: rotate(30deg); }
-  50% { transform: rotate(20deg); }
-}
-@keyframes offHandIdleLower {
-  0%, 100% { transform: rotate(40deg); }
-  50% { transform: rotate(48deg); }
-}
-.stickman.pose-clash .arm.left { animation: none; transform: rotate(60deg); }
-.stickman.pose-clash .arm.left .lower { animation: none; transform: rotate(30deg); }
+/* Off-hand now grips the sword alongside the right hand (two-handed
+   hold) instead of hanging free. Angles are close to arm.right's
+   (-20/35) but offset a few degrees so the second hand still reads as
+   a distinct line rather than perfectly overlapping and disappearing.
+   No independent idle sway anymore -- it should track the sword hand,
+   not wander on its own path, or the "two hands on one hilt" illusion
+   breaks. */
+.stickman .arm.left { transform: rotate(-16deg); }
+.stickman .arm.left .lower { transform: rotate(32deg); }
+.stickman.pose-clash .arm.left { transform: rotate(-66deg); }
+.stickman.pose-clash .arm.left .lower { transform: rotate(35deg); }
 
 /* Weapon Geometry.
    Composed rest angle = arm.right(-20) + arm.right .lower(35) + sword's
@@ -265,8 +304,8 @@ body { font-family: 'Space Grotesk', sans-serif; }
 /* Blade snaps straight out and back */
 .atk-thrust .arm.right { animation: thrustArm 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .atk-thrust .sword { animation: thrustSword 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
-/* Off-hand counterbalances the lunge, pulling back sharply */
-.atk-thrust .arm.left { animation: offHandThrust 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+/* Off-hand rides along on the second grip, matching the sword arm's motion */
+.atk-thrust .arm.left { animation: bothHandsThrust 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
 @keyframes thrustArm {
   0%, 100% { transform: rotate(-20deg); }
   45% { transform: rotate(-55deg); }
@@ -275,27 +314,12 @@ body { font-family: 'Space Grotesk', sans-serif; }
   0%, 100% { transform: rotate(-150deg); }
   45% { transform: rotate(-140deg); } /* straightens toward the target */
 }
-@keyframes offHandThrust {
-  0%, 100% { transform: rotate(30deg); }
-  45% { transform: rotate(-25deg); }
+@keyframes bothHandsThrust {
+  0%, 100% { transform: rotate(-16deg); }
+  45% { transform: rotate(-51deg); }
 }
 
-/* -- ATTACK 2: PUNCH JAB (off-hand — the sword stays gripped and ready) -- */
-.atk-punch .torso { transform: rotate(18deg); }
-/* Front leg braces down forward */
-.atk-punch .leg.right { transform: rotate(42deg); }
-.atk-punch .leg.right .lower { transform: rotate(8deg); }
-/* Back leg extends and stretches */
-.atk-punch .leg.left { transform: rotate(-45deg); }
-.atk-punch .leg.left .lower { transform: rotate(12deg); }
-/* Free hand throws the jab */
-.atk-punch .arm.left { animation: snapPunch 0.15s cubic-bezier(0.1, 0.9, 0.2, 1); }
-@keyframes snapPunch {
-  0%, 100% { transform: rotate(30deg); }
-  40% { transform: rotate(-85deg); }
-}
-
-/* -- ATTACK 3: CROSS SLASH -- */
+/* -- ATTACK 2: CROSS SLASH -- */
 .atk-crosscut .torso { transform: rotate(-8deg); }
 .atk-crosscut .leg.right { transform: rotate(40deg); }
 .atk-crosscut .leg.right .lower { transform: rotate(10deg); }
@@ -304,8 +328,8 @@ body { font-family: 'Space Grotesk', sans-serif; }
 /* Blade sweeps sideways across the body */
 .atk-crosscut .arm.right { animation: crossArm 0.18s ease-out; }
 .atk-crosscut .sword { animation: crossSword 0.18s ease-out; }
-/* Off-hand swings the opposite direction, countering the twist */
-.atk-crosscut .arm.left { animation: offHandCross 0.18s ease-out; }
+/* Off-hand rides along, matching the sword arm's sideways sweep */
+.atk-crosscut .arm.left { animation: bothHandsCross 0.18s ease-out; }
 @keyframes crossArm {
   0%, 100% { transform: rotate(-20deg); }
   50% { transform: rotate(55deg); }
@@ -314,12 +338,12 @@ body { font-family: 'Space Grotesk', sans-serif; }
   0%, 100% { transform: rotate(-150deg); }
   50% { transform: rotate(-60deg); }
 }
-@keyframes offHandCross {
-  0%, 100% { transform: rotate(30deg); }
-  50% { transform: rotate(75deg); }
+@keyframes bothHandsCross {
+  0%, 100% { transform: rotate(-16deg); }
+  50% { transform: rotate(59deg); }
 }
 
-/* -- ATTACK 4: SNAP KICK (both hands stay on guard, legs do the work) -- */
+/* -- ATTACK 3: SNAP KICK (both hands stay on the hilt, legs do the work) -- */
 .atk-kick .torso { transform: rotate(-15deg); }
 /* Support leg bends deep, bracing the weight */
 .atk-kick .leg.left { transform: rotate(-20deg); }
@@ -337,21 +361,20 @@ body { font-family: 'Space Grotesk', sans-serif; }
   45% { transform: rotate(-5deg); }
 }
 
-/* -- ATTACK 5: LUNGE OVERHEAD SLASH -- */
+/* -- ATTACK 4: LUNGE OVERHEAD SLASH -- */
 .atk-slash .torso { transform: rotate(25deg); }
 /* Maximum low step push forward */
 .atk-slash .leg.right { transform: rotate(50deg); }
 .atk-slash .leg.right .lower { transform: rotate(22deg); }
 .atk-slash .leg.left { transform: rotate(-55deg); }
 .atk-slash .leg.left .lower { transform: rotate(10deg); }
-/* Weapon arc swing */
+/* Weapon arc swing, both hands on the hilt */
 .atk-slash .arm.right { animation: slashArmU 0.18s ease-out; }
 .atk-slash .sword { animation: slashSwordW 0.18s ease-out; }
-/* Off-hand flings back for balance during the big overhead cleave */
-.atk-slash .arm.left { animation: offHandSlash 0.18s ease-out; }
+.atk-slash .arm.left { animation: bothHandsSlash 0.18s ease-out; }
 @keyframes slashArmU { 0%, 100% { transform: rotate(-20deg); } 35% { transform: rotate(-110deg); } }
 @keyframes slashSwordW { 0%, 100% { transform: rotate(-150deg); } 35% { transform: rotate(-70deg); } 65% { transform: rotate(-185deg); } }
-@keyframes offHandSlash { 0%, 100% { transform: rotate(30deg); } 35% { transform: rotate(-10deg); } 65% { transform: rotate(50deg); } }
+@keyframes bothHandsSlash { 0%, 100% { transform: rotate(-16deg); } 35% { transform: rotate(-106deg); } }
 
 /* -- FOOTWORK: a quick forward step on every attack, echoing the
    reference clip's constant closing-the-distance footwork -- */
