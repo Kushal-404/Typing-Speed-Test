@@ -384,9 +384,11 @@ body { font-family: 'Space Grotesk', sans-serif; }
   45% { transform: translateX(8px); }
 }
 
-/* -- HIT REACTION (Defender) -- */
-#defender.state-hit { animation: rapidFlinch 0.2s ease-out; }
-#defender.state-hit div { border-color: var(--bad); background-color: var(--bad); }
+/* -- HIT REACTION (either fighter — Normal Mode only ever hits the
+   defender, but AI Mode needs the attacker to take hits back too) -- */
+.stickman { --kb: 16px; }
+.stickman.state-hit { animation: rapidFlinch 0.2s ease-out; }
+.stickman.state-hit div { border-color: var(--bad); background-color: var(--bad); }
 @keyframes rapidFlinch {
   0% { transform: translateX(0) rotate(0deg); }
   30% { transform: translateX(var(--kb)) rotate(8deg); }
