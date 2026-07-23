@@ -76,7 +76,10 @@ const el = {
   stageWrapper: document.getElementById('stageWrapper'),
   duelContainer: document.getElementById('duelContainer'),
   spark: document.getElementById('spark'),
-  hitCount: document.getElementById('hitCount'),
+  attackerHpFill: document.getElementById('attackerHpFill'),
+  attackerHpText: document.getElementById('attackerHpText'),
+  defenderHpFill: document.getElementById('defenderHpFill'),
+  defenderHpText: document.getElementById('defenderHpText'),
   comboCount: document.getElementById('comboCount'),
   comboBadge: document.getElementById('comboBadge'),
 
@@ -109,9 +112,86 @@ const el = {
   backFromBattleResultBtn: document.getElementById('backFromBattleResultBtn'),
 };
  
-let hitCount = 0;
+let hitCount = 0; // still drives ATTACK_TYPES cycling; no longer displayed directly
 let combo = 0;
 let actionTimeout = null;
+let consecutiveMisses = 0;
+
+/* ---------------------------------------------------------
+   HP / DAMAGE SYSTEM
+   "Your typing skill is your fighting skill": damage scales with
+   accuracy and combo, so better typing directly produces a stronger
+   fighter. koTriggered is a synchronous guard set the instant HP
+   crosses zero -- separate from state.finished, which only flips
+   after the delayed result transition. Without this separate flag,
+   the bot's 150ms tick loop (or a fast typist landing several hits
+   in the same frame) can cross the KO threshold more than once
+   before the first KO's delayed finish fires, double-triggering the
+   end-of-round flow. That double-trigger is the most likely cause of
+   the "broken in every mode" bug from the previous attempt, since
+   every mode shares this same finish path.
+--------------------------------------------------------- */
+const HP_MAX = 100;
+const KO_RESULT_DELAY = 700; // ms -- lets the finishing hit's animation play before cutting to results
+const MISS_PUNISH_THRESHOLD = 3; // consecutive mistakes before the AI bot gets a free punish hit
+const BOT_HIT_DAMAGE = 8;
+
+let attackerHP = HP_MAX;
+let defenderHP = HP_MAX;
+let koTriggered = false;
+
+function currentAccuracyPct(){
+  return state.totalTyped > 0 ? (state.totalCorrect / state.totalTyped) * 100 : 100;
+}
+
+// Higher accuracy -> stronger hits; higher combo -> stronger hits.
+// A mistake immediately weakens the next few hits by resetting combo
+// and dragging accuracy down, without needing extra punishment logic.
+function playerDamage(){
+  const acc = currentAccuracyPct();
+  const accuracyMultiplier = 0.6 + (acc / 100) * 0.6; // 60% dmg at 0% acc -> 120% dmg at 100% acc
+  const comboBonus = Math.min(combo * 0.6, 10);
+  return Math.round((8 + comboBonus) * accuracyMultiplier);
+}
+
+function updateHpBar(fillEl, textEl, hp){
+  const pct = Math.max(0, Math.min(100, hp));
+  fillEl.style.width = pct + '%';
+  textEl.textContent = Math.round(pct);
+  fillEl.classList.toggle('low', pct > 0 && pct <= 25);
+}
+
+// Single choke point for all damage -- both triggerAttack (player hits
+// defender) and triggerBotAttack (bot hits attacker) route through
+// this, so HP clamping and the KO guard only need to live in one place.
+function applyDamage(target, amount){
+  if (koTriggered) return;
+  if (target === 'defender'){
+    defenderHP = Math.max(0, defenderHP - amount);
+    updateHpBar(el.defenderHpFill, el.defenderHpText, defenderHP);
+    if (defenderHP <= 0) triggerKO('attacker');
+  } else {
+    attackerHP = Math.max(0, attackerHP - amount);
+    updateHpBar(el.attackerHpFill, el.attackerHpText, attackerHP);
+    if (attackerHP <= 0) triggerKO('defender');
+  }
+}
+
+// winnerSide: 'attacker' (player landed the finishing blow) or
+// 'defender' (the bot did, AI Mode only). Stops the bot immediately
+// so it can't land further hits during the delay, freezes input via
+// state.koPending, then waits KO_RESULT_DELAY before actually ending
+// the round so the last animation isn't cut off mid-swing.
+let koResultTimeoutId = null;
+function triggerKO(winnerSide){
+  if (koTriggered) return; // hard stop -- this is what prevents the double-fire race
+  koTriggered = true;
+  state.koPending = true;
+  clearInterval(botTimerId);
+  koResultTimeoutId = setTimeout(() => {
+    finishRoundKO(winnerSide);
+  }, KO_RESULT_DELAY);
+}
 
 const ATTACK_TYPES = ['atk-thrust', 'atk-crosscut', 'atk-kick', 'atk-slash'];
 const ATTACK_DURATIONS = { 'atk-thrust': 160, 'atk-crosscut': 180, 'atk-kick': 200, 'atk-slash': 180 };
@@ -138,7 +218,7 @@ function positionSpark() {
 function triggerAttack(){
   hitCount += 1;
   combo += 1;
-  el.hitCount.textContent = hitCount;
+  consecutiveMisses = 0;
   el.comboCount.textContent = combo;
   el.comboBadge.classList.toggle('hidden-badge', combo < 8);
   
@@ -160,6 +240,8 @@ function triggerAttack(){
   actionTimeout = setTimeout(() => {
     el.attacker.classList.remove(type);
   }, ATTACK_DURATIONS[type]);
+
+  applyDamage('defender', playerDamage());
 }
  
 function triggerMiss(){
@@ -174,6 +256,17 @@ function triggerMiss(){
   actionTimeout = setTimeout(() => {
     el.attacker.classList.remove('state-miss');
   }, 250);
+
+  // AI Mode only: string together enough mistakes in a row and the
+  // bot gets a free punish hit -- reuses the bot's own attack (visual
+  // + damage) rather than duplicating that logic here
+  if (currentMode === 'battle-ai' && !koTriggered){
+    consecutiveMisses += 1;
+    if (consecutiveMisses >= MISS_PUNISH_THRESHOLD){
+      consecutiveMisses = 0;
+      triggerBotAttack();
+    }
+  }
 }
 
 function updateStageProgression(idx, total) {
@@ -282,7 +375,7 @@ function startTimer(){
     state.timeLeft -= 1;
     el.timerDisplay.textContent = state.timeLeft;
     updateLiveStats();
-    if (state.timeLeft <= 0){
+    if (state.timeLeft <= 0 && !state.koPending){
       finishTest();
     }
   }, 1000);
@@ -305,7 +398,7 @@ function updateLiveStats(){
  
 function handleKeydown(e){
   if (!ARENA_MODES.includes(currentMode)) return;
-  if (state.finished) return;
+  if (state.finished || state.koPending) return;
  
   if (e.key === 'Tab'){
     state.tabPressed = true;
@@ -381,6 +474,7 @@ function handleKeydown(e){
    of the attacker, with the mirror wrapper handling the visual flip.
 --------------------------------------------------------- */
 function triggerBotAttack(){
+  if (koTriggered) return; // don't play a bot attack after the round's already decided
   const type = ATTACK_TYPES[botCharsTyped % ATTACK_TYPES.length];
   clearTimeout(botActionTimeout);
   el.defender.classList.remove(...ATTACK_TYPES);
@@ -395,10 +489,12 @@ function triggerBotAttack(){
   const kb = Math.min(12 + botCharsTyped * 0.4, 30);
   el.attacker.style.setProperty('--kb', (-kb).toFixed(1) + 'px');
   pulse(el.attacker, 'state-hit');
+
+  applyDamage('attacker', BOT_HIT_DAMAGE);
 }
 
 function botTick(){
-  if (state.finished || currentMode !== 'battle-ai'){
+  if (state.finished || state.koPending || currentMode !== 'battle-ai'){
     clearInterval(botTimerId);
     return;
   }
@@ -407,9 +503,13 @@ function botTick(){
   const targetChars = Math.floor(botTargetWpm * 5 * elapsedMin);
   const newCount = Math.min(targetChars, total);
 
-  while (botCharsTyped < newCount){
+  while (botCharsTyped < newCount && !koTriggered){
     botCharsTyped += 1;
     triggerBotAttack();
+  }
+  if (koTriggered){
+    clearInterval(botTimerId);
+    return;
   }
 
   const liveWpm = elapsedMin > 0 ? Math.round((botCharsTyped / 5) / elapsedMin) : 0;
@@ -445,7 +545,7 @@ async function startPVPRound(){
   }
 }
 
-function showBattleResult({ leftLabel, leftWpm, leftAcc, rightLabel, rightWpm, rightAcc }){
+function showBattleResult({ leftLabel, leftWpm, leftAcc, rightLabel, rightWpm, rightAcc, koSide }){
   el.battleLeftLabel.textContent = leftLabel;
   el.battleLeftWpm.textContent = leftWpm;
   el.battleLeftAcc.textContent = `${leftAcc}% acc`;
@@ -453,15 +553,31 @@ function showBattleResult({ leftLabel, leftWpm, leftAcc, rightLabel, rightWpm, r
   el.battleRightWpm.textContent = rightWpm;
   el.battleRightAcc.textContent = `${rightAcc}% acc`;
 
-  el.battleWinnerBanner.textContent =
-    leftWpm === rightWpm ? "It's a tie!" : (leftWpm > rightWpm ? `${leftLabel} wins!` : `${rightLabel} wins!`);
+  if (koSide === 'left'){
+    el.battleWinnerBanner.textContent = `${leftLabel} wins by K.O.!`;
+  } else if (koSide === 'right'){
+    el.battleWinnerBanner.textContent = `${rightLabel} wins by K.O.!`;
+  } else {
+    el.battleWinnerBanner.textContent =
+      leftWpm === rightWpm ? "It's a tie!" : (leftWpm > rightWpm ? `${leftLabel} wins!` : `${rightLabel} wins!`);
+  }
 
   showScreen('battle-result');
+}
+
+// Set by triggerKO() right before the delayed finishTest() call, so
+// the branches below know whether -- and how -- this round ended in
+// a knockout rather than a normal time-up/paragraph-complete finish.
+let koWinnerSide = null; // 'attacker' | 'defender' | null
+function finishRoundKO(side){
+  koWinnerSide = side;
+  finishTest();
 }
 
 function finishTest(){
   if (state.finished) return;
   state.finished = true;
+  state.koPending = false;
   clearInterval(state.timerId);
   clearInterval(botTimerId);
   
@@ -484,7 +600,9 @@ function finishTest(){
     el.finalAcc.textContent = finalAcc;
     el.finalErrors.textContent = state.totalErrors;
     el.finalChars.textContent = state.totalTyped;
-    el.resultMeta.textContent = `${state.selectedTime}s test`;
+    el.resultMeta.textContent = koWinnerSide === 'attacker'
+      ? `K.O.! · ${state.selectedTime}s test`
+      : `${state.selectedTime}s test`;
     el.typingCard.classList.add('hidden');
     el.resultsCard.classList.remove('hidden');
     return;
@@ -493,9 +611,11 @@ function finishTest(){
   if (currentMode === 'battle-ai'){
     const botElapsedMin = (performance.now() - botStartTime) / 60000;
     const botWpmFinal = botElapsedMin > 0 ? Math.round((botCharsTyped / 5) / botElapsedMin) : 0;
+    const koSide = koWinnerSide === 'attacker' ? 'left' : (koWinnerSide === 'defender' ? 'right' : null);
     showBattleResult({
       leftLabel: 'You', leftWpm: roundedWpm, leftAcc: finalAcc,
       rightLabel: 'Bot', rightWpm: botWpmFinal, rightAcc: 98,
+      koSide,
     });
     return;
   }
@@ -521,12 +641,14 @@ async function resetTest(forcedText){
   clearInterval(state.timerId);
   clearInterval(botTimerId);
   clearTimeout(botActionTimeout);
+  clearTimeout(koResultTimeoutId);
   state = {
     selectedTime: state.selectedTime,
     timeLeft: state.selectedTime,
     timerId: null,
     started: false,
     finished: false,
+    koPending: false,
     currentText: "", // loads in below; empty string safely no-ops any keystroke until then
     typedChars: [],
     totalTyped: 0,
@@ -545,10 +667,16 @@ async function resetTest(forcedText){
  
   hitCount = 0;
   combo = 0;
+  consecutiveMisses = 0;
+  koTriggered = false;
+  koWinnerSide = null;
+  attackerHP = HP_MAX;
+  defenderHP = HP_MAX;
+  updateHpBar(el.attackerHpFill, el.attackerHpText, attackerHP);
+  updateHpBar(el.defenderHpFill, el.defenderHpText, defenderHP);
   botCharsTyped = 0;
   el.botWpm.textContent = 0;
   clearTimeout(actionTimeout);
-  el.hitCount.textContent = 0;
   el.comboCount.textContent = 0;
   el.comboBadge.classList.add('hidden-badge');
   
@@ -656,6 +784,7 @@ function returnFromArena(){
   // keeps ticking or firing keydown-driven combat logic in the background
   clearInterval(state.timerId);
   clearInterval(botTimerId);
+  clearTimeout(koResultTimeoutId); // a pending KO result must not fire on a screen we've left
   state.finished = true;
   if (currentMode === 'battle-ai' || currentMode === 'battle-pvp'){
     showScreen('battle-select');
@@ -667,6 +796,7 @@ function returnFromArena(){
 function goToTopMenu(){
   clearInterval(state.timerId);
   clearInterval(botTimerId);
+  clearTimeout(koResultTimeoutId);
   state.finished = true;
   showScreen('menu');
 }
