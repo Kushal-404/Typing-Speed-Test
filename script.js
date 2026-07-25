@@ -120,6 +120,7 @@ const el = {
   defenderHpFill: document.getElementById('defenderHpFill'),
   defenderHpText: document.getElementById('defenderHpText'),
   pvpLivesIndicator: document.getElementById('pvpLivesIndicator'),
+  myLivesIndicator: document.getElementById('myLivesIndicator'),
   comboCount: document.getElementById('comboCount'),
   comboBadge: document.getElementById('comboBadge'),
 
@@ -204,7 +205,8 @@ let attackerHP = HP_MAX;
 let defenderHP = HP_MAX;
 let koTriggered = false;
 let koResultTimeoutId = null; // tracks the pending delayed finish so it can be cancelled if the player navigates away mid-delay
-let defenderLivesRemaining = PVP_LIVES; // PVP only
+let defenderLivesRemaining = PVP_LIVES; // PVP only -- how many bars are left on MY opponent
+let myLivesRemaining = PVP_LIVES; // online PVP only -- how many bars are left on ME
 let pvpDamageDealt = 0; // PVP only -- cumulative damage this player's turn, used as the tiebreaker if time runs out before 3 bars are depleted
 
 function currentAccuracyPct(){
@@ -233,6 +235,14 @@ function updatePvpLivesIndicator(){
   const pips = el.pvpLivesIndicator.querySelectorAll('.pvp-life');
   pips.forEach((pip, i) => {
     pip.classList.toggle('spent', i >= defenderLivesRemaining);
+  });
+}
+
+function updateMyLivesIndicator(){
+  if (!el.myLivesIndicator) return;
+  const pips = el.myLivesIndicator.querySelectorAll('.pvp-life');
+  pips.forEach((pip, i) => {
+    pip.classList.toggle('spent', i >= myLivesRemaining);
   });
 }
 
@@ -266,7 +276,24 @@ function applyDamage(target, amount){
   } else {
     attackerHP = Math.max(0, attackerHP - amount);
     updateHpBar(el.attackerHpFill, el.attackerHpText, attackerHP);
-    if (attackerHP <= 0) triggerKO('defender');
+
+    if (attackerHP <= 0){
+      if (currentMode === 'battle-pvp-online'){
+        // symmetric to the defender branch above: online PVP needs the
+        // attacker side to survive PVP_LIVES hits too, since a real
+        // opponent (not a one-hit-KO bot) is dealing this damage
+        myLivesRemaining -= 1;
+        updateMyLivesIndicator();
+        if (myLivesRemaining > 0){
+          attackerHP = HP_MAX;
+          updateHpBar(el.attackerHpFill, el.attackerHpText, attackerHP);
+        } else {
+          triggerKO('defender'); // opponent depleted all three of my bars -- they win
+        }
+      } else {
+        triggerKO('defender'); // AI mode -- one bar, one hit ends it
+      }
+    }
   }
 }
 
@@ -337,7 +364,15 @@ function triggerAttack(){
   // HP/damage only exists in Battle Mode (AI + PVP) -- Normal Mode is
   // purely a typing test with visual flavor, no win/lose condition
   if (currentMode !== 'normal'){
-    applyDamage('defender', playerDamage());
+    const dmg = playerDamage();
+    applyDamage('defender', dmg);
+    if (currentMode === 'battle-pvp-online'){
+      // send the exact number dealt, not just a "hit happened" ping --
+      // the friend's client applies this value directly rather than
+      // recomputing it, so both sides can never drift out of sync
+      console.log('[lobby] sending hit broadcast:', dmg);
+      broadcastLobbyEvent('hit', { damage: dmg });
+    }
   }
 }
  
@@ -590,6 +625,31 @@ function triggerBotAttack(){
   applyDamage('attacker', BOT_HIT_DAMAGE);
 }
 
+// Online PVP: mirrors triggerBotAttack's visual pattern exactly, but is
+// driven by a real hit broadcast from the friend's client instead of a
+// simulated bot timer. The damage amount is transmitted rather than
+// recomputed locally, so both clients always agree on the exact number.
+let remoteHitsReceived = 0;
+let remoteActionTimeout = null;
+
+function applyRemoteHit(damage){
+  if (koTriggered) return;
+  remoteHitsReceived += 1;
+  const type = ATTACK_TYPES[remoteHitsReceived % ATTACK_TYPES.length];
+  clearTimeout(remoteActionTimeout);
+  el.defender.classList.remove(...ATTACK_TYPES);
+  pulse(el.defender, type);
+  remoteActionTimeout = setTimeout(() => {
+    el.defender.classList.remove(type);
+  }, ATTACK_DURATIONS[type]);
+
+  const kb = Math.min(12 + remoteHitsReceived * 0.4, 30);
+  el.attacker.style.setProperty('--kb', (-kb).toFixed(1) + 'px');
+  pulse(el.attacker, 'state-hit');
+
+  applyDamage('attacker', damage);
+}
+
 function botTick(){
   if (state.finished || state.koPending || currentMode !== 'battle-ai'){
     clearInterval(botTimerId);
@@ -775,6 +835,7 @@ async function resetTest(forcedText){
   clearInterval(state.timerId);
   clearInterval(botTimerId);
   clearTimeout(botActionTimeout);
+  clearTimeout(remoteActionTimeout);
   clearTimeout(koResultTimeoutId);
   state = {
     selectedTime: state.selectedTime,
@@ -807,10 +868,13 @@ async function resetTest(forcedText){
   attackerHP = HP_MAX;
   defenderHP = HP_MAX;
   defenderLivesRemaining = PVP_LIVES;
+  myLivesRemaining = PVP_LIVES;
   pvpDamageDealt = 0;
+  remoteHitsReceived = 0;
   updateHpBar(el.attackerHpFill, el.attackerHpText, attackerHP);
   updateHpBar(el.defenderHpFill, el.defenderHpText, defenderHP);
   updatePvpLivesIndicator();
+  updateMyLivesIndicator();
   botCharsTyped = 0;
   el.botWpm.textContent = 0;
   clearTimeout(actionTimeout);
@@ -892,6 +956,7 @@ function showScreen(mode){
   el.battleHpBars.classList.toggle('hidden', mode !== 'battle-ai' && !isPvpMode(mode));
   el.normalHitCounter.classList.toggle('hidden', mode !== 'normal');
   el.pvpLivesIndicator.classList.toggle('hidden', !isPvpMode(mode));
+  el.myLivesIndicator.classList.toggle('hidden', mode !== 'battle-pvp-online');
   el.backToMenuBtn.textContent = (mode === 'battle-ai' || isPvpMode(mode)) ? '← battle menu' : '← menu';
 }
 
@@ -983,9 +1048,16 @@ function leaveLobby(){
   lobbyRoundStarted = false;
 }
 
-function broadcastLobbyEvent(type, payload){
+async function broadcastLobbyEvent(type, payload){
   if (!lobbyChannel) return;
-  lobbyChannel.send({ type: 'broadcast', event: type, payload });
+  try {
+    const status = await lobbyChannel.send({ type: 'broadcast', event: type, payload });
+    if (status !== 'ok'){
+      console.warn(`[lobby] broadcast "${type}" did not send cleanly, status:`, status);
+    }
+  } catch (err){
+    console.error(`[lobby] broadcast "${type}" threw an error:`, err);
+  }
 }
 
 let lobbyRoundStarted = false;
@@ -1023,6 +1095,11 @@ async function connectToLobby(code, asHost){
 
   channel.on('broadcast', { event: 'start' }, ({ payload }) => {
     beginOnlineRound(payload.paragraph);
+  });
+
+  channel.on('broadcast', { event: 'hit' }, ({ payload }) => {
+    console.log('[lobby] received hit broadcast:', payload);
+    applyRemoteHit(payload.damage);
   });
 
   channel.on('broadcast', { event: 'result' }, ({ payload }) => {

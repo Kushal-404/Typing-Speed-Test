@@ -72,7 +72,10 @@
         <div>
           <div class="flex items-center justify-between mono text-[10px] text-[var(--muted)] mb-1">
             <span id="attackerHpLabel">You</span>
-            <span><span id="attackerHpText">100</span>/100</span>
+            <span class="flex items-center gap-2">
+              <span id="myLivesIndicator" class="hidden"><span class="pvp-life"></span><span class="pvp-life"></span><span class="pvp-life"></span></span>
+              <span><span id="attackerHpText">100</span>/100</span>
+            </span>
           </div>
           <div class="hp-bar-track">
             <div id="attackerHpFill" class="hp-bar-fill hp-bar-fill-player" style="width:100%"></div>

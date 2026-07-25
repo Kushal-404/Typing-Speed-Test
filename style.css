@@ -144,6 +144,7 @@ body { font-family: 'Space Grotesk', sans-serif; }
 }
 
 #pvpLivesIndicator:not(.hidden) { display: flex; gap: 4px; align-items: center; }
+#myLivesIndicator:not(.hidden) { display: flex; gap: 4px; align-items: center; }
 .pvp-life {
   width: 7px;
   height: 7px;
