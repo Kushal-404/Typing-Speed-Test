@@ -143,6 +143,31 @@ body { font-family: 'Space Grotesk', sans-serif; }
   50% { opacity: 0.55; }
 }
 
+#pvpLivesIndicator:not(.hidden) { display: flex; gap: 4px; align-items: center; }
+.pvp-life {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bad);
+  display: inline-block;
+  transition: background-color 200ms ease, opacity 200ms ease;
+}
+.pvp-life.spent {
+  background: var(--hairline);
+  opacity: 0.6;
+}
+
+/* ---------------------------------------------------------
+   FRIEND LOBBY (Play with Friend online PVP)
+--------------------------------------------------------- */
+#lobbyStatusDot { transition: background-color 200ms ease; }
+#lobbyStatusDot.connected { background: var(--good); animation: none; }
+#lobbyStatusDot:not(.connected) { animation: lobbyPulse 1.2s ease-in-out infinite; }
+@keyframes lobbyPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.mode-card.opacity-60 { cursor: not-allowed; pointer-events: none; }
+.mode-card.opacity-60:hover { transform: none; border-color: var(--hairline); box-shadow: none; }
+
 /* ---------------------------------------------------------
    PROPORTIONAL STICKMAN ARCHITECTURE (Connected Head & Taller Profile)
 --------------------------------------------------------- */

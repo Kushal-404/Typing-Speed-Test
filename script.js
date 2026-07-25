@@ -18,10 +18,17 @@ const DEFAULT_TIME = 60;
 /* ---------------------------------------------------------
    STATE
 --------------------------------------------------------- */
-let currentMode = 'menu'; // 'menu' | 'normal' | 'battle-select' | 'battle-ai' | 'battle-pvp' | 'battle-interstitial' | 'battle-result'
-const ARENA_MODES = ['normal', 'battle-ai', 'battle-pvp']; // modes where the typing arena is live and listening
+let currentMode = 'menu'; // 'menu' | 'normal' | 'battle-select' | 'battle-ai' | 'battle-pvp' | 'battle-pvp-online' | 'pvp-select' | 'friend-lobby' | 'battle-interstitial' | 'battle-result'
+const ARENA_MODES = ['normal', 'battle-ai', 'battle-pvp', 'battle-pvp-online']; // modes where the typing arena is live and listening
 
 let lastBattleVariant = null; // 'ai' | 'pvp' — remembered for the Rematch button
+
+// PVP covers two distinct implementations (local hot-seat vs online friend
+// lobby) that share all the same HP/damage/3-lives combat logic -- this
+// helper is what lets applyDamage() etc. treat them identically.
+function isPvpMode(mode){
+  return mode === 'battle-pvp' || mode === 'battle-pvp-online';
+}
 
 // AI Mode: simulated bot opponent
 let botTimerId = null;
@@ -30,10 +37,39 @@ let botCharsTyped = 0;
 let botStartTime = 0;
 let botTargetWpm = 0;
 
-// PVP Mode: local hot-seat, two sequential rounds on the same paragraph
+// PVP Mode (local): hot-seat, two sequential rounds on the same paragraph
 let pvpRound = 1;
 let pvpSharedParagraph = '';
 let pvpP1Stats = null;
+
+/* ---------------------------------------------------------
+   PVP MODE (online): Play with Friend, via a Supabase Realtime
+   Broadcast + Presence channel named after the lobby code. No
+   database table needed -- these are ephemeral pub/sub channels.
+
+   FILL IN YOUR OWN PROJECT CREDENTIALS BELOW. Both values are from
+   Supabase project settings -> API. The anon/public key is safe to
+   expose client-side by design (it's rate-limited and has no admin
+   rights) -- it is NOT a secret key.
+--------------------------------------------------------- */
+const SUPABASE_URL = 'https://gcnjsbswxppvlnmiyard.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_ylVFkg2bynXFQ-MMJwCIng_bV14fZsv';
+
+let supabaseClient = null;
+try {
+  if (window.supabase && SUPABASE_URL.startsWith('http')){
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch (err){
+  console.warn('Supabase client not initialized -- Play with Friend will be unavailable until credentials are set.', err);
+}
+
+let lobbyChannel = null;
+let lobbyCode = '';
+let isLobbyHost = false;
+let onlineOwnStats = null;
+let onlineOpponentStats = null;
+let onlineOpponentPresent = false;
 
 let state = {
   selectedTime: DEFAULT_TIME,
@@ -76,10 +112,14 @@ const el = {
   stageWrapper: document.getElementById('stageWrapper'),
   duelContainer: document.getElementById('duelContainer'),
   spark: document.getElementById('spark'),
+  normalHitCounter: document.getElementById('normalHitCounter'),
+  hitCount: document.getElementById('hitCount'),
+  battleHpBars: document.getElementById('battleHpBars'),
   attackerHpFill: document.getElementById('attackerHpFill'),
   attackerHpText: document.getElementById('attackerHpText'),
   defenderHpFill: document.getElementById('defenderHpFill'),
   defenderHpText: document.getElementById('defenderHpText'),
+  pvpLivesIndicator: document.getElementById('pvpLivesIndicator'),
   comboCount: document.getElementById('comboCount'),
   comboBadge: document.getElementById('comboBadge'),
 
@@ -93,6 +133,26 @@ const el = {
 
   selectAiBtn: document.getElementById('selectAiBtn'),
   selectPvpBtn: document.getElementById('selectPvpBtn'),
+
+  pvpSubSelectScreen: document.getElementById('pvpSubSelectScreen'),
+  selectLocalPvpBtn: document.getElementById('selectLocalPvpBtn'),
+  selectFriendPvpBtn: document.getElementById('selectFriendPvpBtn'),
+  selectRandomPvpBtn: document.getElementById('selectRandomPvpBtn'),
+  backFromPvpSubSelectBtn: document.getElementById('backFromPvpSubSelectBtn'),
+
+  friendLobbyScreen: document.getElementById('friendLobbyScreen'),
+  lobbyChooseView: document.getElementById('lobbyChooseView'),
+  lobbyWaitingView: document.getElementById('lobbyWaitingView'),
+  lobbyResultWaitView: document.getElementById('lobbyResultWaitView'),
+  createLobbyBtn: document.getElementById('createLobbyBtn'),
+  joinLobbyInput: document.getElementById('joinLobbyInput'),
+  joinLobbyBtn: document.getElementById('joinLobbyBtn'),
+  lobbyCodeDisplay: document.getElementById('lobbyCodeDisplay'),
+  lobbyStatusDot: document.getElementById('lobbyStatusDot'),
+  lobbyStatusText: document.getElementById('lobbyStatusText'),
+  lobbyErrorText: document.getElementById('lobbyErrorText'),
+  backFromFriendLobbyBtn: document.getElementById('backFromFriendLobbyBtn'),
+
   pvpTurnBanner: document.getElementById('pvpTurnBanner'),
   opponentStat: document.getElementById('opponentStat'),
   botWpm: document.getElementById('botWpm'),
@@ -134,11 +194,18 @@ let consecutiveMisses = 0;
 const HP_MAX = 100;
 const KO_RESULT_DELAY = 700; // ms -- lets the finishing hit's animation play before cutting to results
 const MISS_PUNISH_THRESHOLD = 3; // consecutive mistakes before the AI bot gets a free punish hit
-const BOT_HIT_DAMAGE = 8;
+// Attacking power reduced 80% from the original formula per user request --
+// fights were ending too fast. Both sides' base damage is scaled by 0.2.
+const DAMAGE_SCALE = 0.2;
+const BOT_HIT_DAMAGE = 8 * DAMAGE_SCALE;
+const PVP_LIVES = 3; // PVP: the defender's HP bar must be fully depleted this many times to win outright
 
 let attackerHP = HP_MAX;
 let defenderHP = HP_MAX;
 let koTriggered = false;
+let koResultTimeoutId = null; // tracks the pending delayed finish so it can be cancelled if the player navigates away mid-delay
+let defenderLivesRemaining = PVP_LIVES; // PVP only
+let pvpDamageDealt = 0; // PVP only -- cumulative damage this player's turn, used as the tiebreaker if time runs out before 3 bars are depleted
 
 function currentAccuracyPct(){
   return state.totalTyped > 0 ? (state.totalCorrect / state.totalTyped) * 100 : 100;
@@ -151,7 +218,8 @@ function playerDamage(){
   const acc = currentAccuracyPct();
   const accuracyMultiplier = 0.6 + (acc / 100) * 0.6; // 60% dmg at 0% acc -> 120% dmg at 100% acc
   const comboBonus = Math.min(combo * 0.6, 10);
-  return Math.round((8 + comboBonus) * accuracyMultiplier);
+  const raw = (8 + comboBonus) * accuracyMultiplier * DAMAGE_SCALE;
+  return Math.max(1, Math.round(raw)); // floor of 1 so a correct hit always registers something
 }
 
 function updateHpBar(fillEl, textEl, hp){
@@ -161,15 +229,40 @@ function updateHpBar(fillEl, textEl, hp){
   fillEl.classList.toggle('low', pct > 0 && pct <= 25);
 }
 
+function updatePvpLivesIndicator(){
+  const pips = el.pvpLivesIndicator.querySelectorAll('.pvp-life');
+  pips.forEach((pip, i) => {
+    pip.classList.toggle('spent', i >= defenderLivesRemaining);
+  });
+}
+
 // Single choke point for all damage -- both triggerAttack (player hits
 // defender) and triggerBotAttack (bot hits attacker) route through
 // this, so HP clamping and the KO guard only need to live in one place.
+// PVP mode adds a wrinkle: the defender's bar has to be fully drained
+// PVP_LIVES times before the round actually ends -- draining it once
+// just refills it and keeps the same round/timer running.
 function applyDamage(target, amount){
   if (koTriggered) return;
   if (target === 'defender'){
     defenderHP = Math.max(0, defenderHP - amount);
     updateHpBar(el.defenderHpFill, el.defenderHpText, defenderHP);
-    if (defenderHP <= 0) triggerKO('attacker');
+    if (isPvpMode(currentMode)) pvpDamageDealt += amount;
+
+    if (defenderHP <= 0){
+      if (isPvpMode(currentMode)){
+        defenderLivesRemaining -= 1;
+        updatePvpLivesIndicator();
+        if (defenderLivesRemaining > 0){
+          defenderHP = HP_MAX; // one bar down, refill and keep the same round going
+          updateHpBar(el.defenderHpFill, el.defenderHpText, defenderHP);
+        } else {
+          triggerKO('attacker'); // all three bars depleted -- decisive win
+        }
+      } else {
+        triggerKO('attacker'); // AI mode (Normal Mode never reaches here -- damage is gated off there)
+      }
+    }
   } else {
     attackerHP = Math.max(0, attackerHP - amount);
     updateHpBar(el.attackerHpFill, el.attackerHpText, attackerHP);
@@ -182,7 +275,6 @@ function applyDamage(target, amount){
 // so it can't land further hits during the delay, freezes input via
 // state.koPending, then waits KO_RESULT_DELAY before actually ending
 // the round so the last animation isn't cut off mid-swing.
-let koResultTimeoutId = null;
 function triggerKO(winnerSide){
   if (koTriggered) return; // hard stop -- this is what prevents the double-fire race
   koTriggered = true;
@@ -219,6 +311,7 @@ function triggerAttack(){
   hitCount += 1;
   combo += 1;
   consecutiveMisses = 0;
+  el.hitCount.textContent = hitCount;
   el.comboCount.textContent = combo;
   el.comboBadge.classList.toggle('hidden-badge', combo < 8);
   
@@ -241,7 +334,11 @@ function triggerAttack(){
     el.attacker.classList.remove(type);
   }, ATTACK_DURATIONS[type]);
 
-  applyDamage('defender', playerDamage());
+  // HP/damage only exists in Battle Mode (AI + PVP) -- Normal Mode is
+  // purely a typing test with visual flavor, no win/lose condition
+  if (currentMode !== 'normal'){
+    applyDamage('defender', playerDamage());
+  }
 }
  
 function triggerMiss(){
@@ -545,19 +642,33 @@ async function startPVPRound(){
   }
 }
 
-function showBattleResult({ leftLabel, leftWpm, leftAcc, rightLabel, rightWpm, rightAcc, koSide }){
+function showBattleResult({ leftLabel, leftWpm, leftAcc, rightLabel, rightWpm, rightAcc, leftDamage, rightDamage, koSide }){
   el.battleLeftLabel.textContent = leftLabel;
   el.battleLeftWpm.textContent = leftWpm;
-  el.battleLeftAcc.textContent = `${leftAcc}% acc`;
   el.battleRightLabel.textContent = rightLabel;
   el.battleRightWpm.textContent = rightWpm;
-  el.battleRightAcc.textContent = `${rightAcc}% acc`;
+
+  // PVP shows damage dealt (the actual win condition there) instead of
+  // accuracy; AI Mode keeps showing accuracy since WPM/accuracy is what
+  // decides that comparison when neither side lands the finishing blow
+  if (leftDamage !== undefined){
+    el.battleLeftAcc.textContent = `${leftDamage} dmg dealt`;
+    el.battleRightAcc.textContent = `${rightDamage} dmg dealt`;
+  } else {
+    el.battleLeftAcc.textContent = `${leftAcc}% acc`;
+    el.battleRightAcc.textContent = `${rightAcc}% acc`;
+  }
 
   if (koSide === 'left'){
     el.battleWinnerBanner.textContent = `${leftLabel} wins by K.O.!`;
   } else if (koSide === 'right'){
     el.battleWinnerBanner.textContent = `${rightLabel} wins by K.O.!`;
+  } else if (koSide === 'tie'){
+    el.battleWinnerBanner.textContent = "It's a tie!";
   } else {
+    // fallback only used by AI Mode (WPM comparison) -- PVP always
+    // passes an explicit koSide ('left'/'right'/'tie'), never null,
+    // since its winner is decided by damage dealt, not WPM
     el.battleWinnerBanner.textContent =
       leftWpm === rightWpm ? "It's a tie!" : (leftWpm > rightWpm ? `${leftLabel} wins!` : `${rightLabel} wins!`);
   }
@@ -600,9 +711,7 @@ function finishTest(){
     el.finalAcc.textContent = finalAcc;
     el.finalErrors.textContent = state.totalErrors;
     el.finalChars.textContent = state.totalTyped;
-    el.resultMeta.textContent = koWinnerSide === 'attacker'
-      ? `K.O.! · ${state.selectedTime}s test`
-      : `${state.selectedTime}s test`;
+    el.resultMeta.textContent = `${state.selectedTime}s test`;
     el.typingCard.classList.add('hidden');
     el.resultsCard.classList.remove('hidden');
     return;
@@ -621,15 +730,40 @@ function finishTest(){
   }
 
   if (currentMode === 'battle-pvp'){
+    const wonAllThreeBars = koWinnerSide === 'attacker'; // depleted all PVP_LIVES bars before time ran out
+    const damageDealt = Math.round(pvpDamageDealt);
+
     if (pvpRound === 1){
-      pvpP1Stats = { wpm: roundedWpm, acc: finalAcc };
+      pvpP1Stats = { wpm: roundedWpm, acc: finalAcc, damage: damageDealt, wonAllThreeBars };
       showScreen('battle-interstitial');
     } else {
+      const p2 = { wpm: roundedWpm, acc: finalAcc, damage: damageDealt, wonAllThreeBars };
+      // Win condition: whoever depletes all 3 bars first wins outright.
+      // If neither (or, in principle, both) does before time runs out,
+      // whoever dealt more total damage wins; equal damage is a tie.
+      let koSide;
+      if (pvpP1Stats.wonAllThreeBars && !p2.wonAllThreeBars) koSide = 'left';
+      else if (!pvpP1Stats.wonAllThreeBars && p2.wonAllThreeBars) koSide = 'right';
+      else if (pvpP1Stats.damage === p2.damage) koSide = 'tie';
+      else koSide = pvpP1Stats.damage > p2.damage ? 'left' : 'right';
+
       showBattleResult({
-        leftLabel: 'Player 1', leftWpm: pvpP1Stats.wpm, leftAcc: pvpP1Stats.acc,
-        rightLabel: 'Player 2', rightWpm: roundedWpm, rightAcc: finalAcc,
+        leftLabel: 'Player 1', leftWpm: pvpP1Stats.wpm, leftDamage: pvpP1Stats.damage,
+        rightLabel: 'Player 2', rightWpm: p2.wpm, rightDamage: p2.damage,
+        koSide,
       });
     }
+    return;
+  }
+
+  if (currentMode === 'battle-pvp-online'){
+    onlineOwnStats = {
+      wpm: roundedWpm,
+      damage: Math.round(pvpDamageDealt),
+      wonAllThreeBars: koWinnerSide === 'attacker',
+    };
+    broadcastLobbyEvent('result', onlineOwnStats);
+    maybeShowOnlineResult(); // resolves immediately if the opponent's result already arrived first
     return;
   }
 }
@@ -672,11 +806,15 @@ async function resetTest(forcedText){
   koWinnerSide = null;
   attackerHP = HP_MAX;
   defenderHP = HP_MAX;
+  defenderLivesRemaining = PVP_LIVES;
+  pvpDamageDealt = 0;
   updateHpBar(el.attackerHpFill, el.attackerHpText, attackerHP);
   updateHpBar(el.defenderHpFill, el.defenderHpText, defenderHP);
+  updatePvpLivesIndicator();
   botCharsTyped = 0;
   el.botWpm.textContent = 0;
   clearTimeout(actionTimeout);
+  el.hitCount.textContent = 0;
   el.comboCount.textContent = 0;
   el.comboBadge.classList.add('hidden-badge');
   
@@ -724,6 +862,7 @@ function focusInput(){
 --------------------------------------------------------- */
 const ALL_SCREENS = [
   'modeSelectScreen', 'normalModeScreen', 'battleModeScreen',
+  'pvpSubSelectScreen', 'friendLobbyScreen',
   'pvpInterstitialScreen', 'battleResultScreen',
 ];
 
@@ -736,6 +875,9 @@ function showScreen(mode){
     'battle-select': 'battleModeScreen',
     'battle-ai': 'normalModeScreen',
     'battle-pvp': 'normalModeScreen',
+    'battle-pvp-online': 'normalModeScreen',
+    'pvp-select': 'pvpSubSelectScreen',
+    'friend-lobby': 'friendLobbyScreen',
     'battle-interstitial': 'pvpInterstitialScreen',
     'battle-result': 'battleResultScreen',
   };
@@ -744,15 +886,20 @@ function showScreen(mode){
   const target = screenForMode[mode];
   if (target) el[target].classList.remove('hidden');
 
-  // the arena is shared across normal/AI/PVP -- toggle its mode-specific bits
+  // the arena is shared across normal/AI/local-PVP/online-PVP -- toggle its mode-specific bits
   el.pvpTurnBanner.classList.toggle('hidden', mode !== 'battle-pvp');
   el.opponentStat.classList.toggle('hidden', mode !== 'battle-ai');
-  el.backToMenuBtn.textContent = (mode === 'battle-ai' || mode === 'battle-pvp') ? '← battle menu' : '← menu';
+  el.battleHpBars.classList.toggle('hidden', mode !== 'battle-ai' && !isPvpMode(mode));
+  el.normalHitCounter.classList.toggle('hidden', mode !== 'normal');
+  el.pvpLivesIndicator.classList.toggle('hidden', !isPvpMode(mode));
+  el.backToMenuBtn.textContent = (mode === 'battle-ai' || isPvpMode(mode)) ? '← battle menu' : '← menu';
 }
 
 function restartCurrentRound(){
   if (currentMode === 'battle-ai'){ startAIRound(); return; }
   if (currentMode === 'battle-pvp'){ pvpRound = 1; pvpP1Stats = null; startPVPRound(); return; }
+  // online PVP rounds are lobby-driven (host-authoritative), not locally restartable
+  if (currentMode === 'battle-pvp-online') return;
   resetTest();
 }
 
@@ -779,6 +926,180 @@ function enterBattlePVP(){
   startPVPRound();
 }
 
+function enterPvpSubSelect(){
+  showScreen('pvp-select');
+}
+
+/* ---------------------------------------------------------
+   ONLINE PVP: Play with Friend
+   A Supabase Realtime channel named "lobby-<code>" is the whole
+   backend for this feature -- Broadcast carries the shared paragraph
+   and each player's final result; Presence detects when both players
+   are actually in the room. The host is authoritative for paragraph
+   selection (so both players are guaranteed the exact same text) and
+   for deciding when the round starts.
+--------------------------------------------------------- */
+function generateLobbyCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous 0/O or 1/I
+  let code = '';
+  for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+function showLobbyError(msg){
+  el.lobbyErrorText.textContent = msg;
+  el.lobbyErrorText.classList.remove('hidden');
+}
+
+function clearLobbyError(){
+  el.lobbyErrorText.classList.add('hidden');
+  el.lobbyErrorText.textContent = '';
+}
+
+function setLobbyView(view){
+  // view: 'choose' | 'waiting' | 'result-wait'
+  el.lobbyChooseView.classList.toggle('hidden', view !== 'choose');
+  el.lobbyWaitingView.classList.toggle('hidden', view !== 'waiting');
+  el.lobbyResultWaitView.classList.toggle('hidden', view !== 'result-wait');
+}
+
+function enterFriendLobby(){
+  clearLobbyError();
+  setLobbyView('choose');
+  el.joinLobbyInput.value = '';
+  showScreen('friend-lobby');
+}
+
+function leaveLobby(){
+  if (lobbyChannel && supabaseClient){
+    supabaseClient.removeChannel(lobbyChannel);
+  }
+  lobbyChannel = null;
+  lobbyCode = '';
+  isLobbyHost = false;
+  onlineOwnStats = null;
+  onlineOpponentStats = null;
+  onlineOpponentPresent = false;
+  lobbyRoundStarted = false;
+}
+
+function broadcastLobbyEvent(type, payload){
+  if (!lobbyChannel) return;
+  lobbyChannel.send({ type: 'broadcast', event: type, payload });
+}
+
+let lobbyRoundStarted = false;
+
+async function connectToLobby(code, asHost){
+  if (!supabaseClient){
+    showLobbyError('Online play needs Supabase credentials set in script.js (SUPABASE_URL / SUPABASE_ANON_KEY) first.');
+    return;
+  }
+  clearLobbyError();
+  leaveLobby(); // clean up any previous connection before starting a new one
+  lobbyCode = code;
+  isLobbyHost = asHost;
+
+  const myId = Math.random().toString(36).slice(2, 10);
+  const channel = supabaseClient.channel(`lobby-${code}`, {
+    config: { presence: { key: myId } },
+  });
+
+  channel.on('presence', { event: 'sync' }, () => {
+    const presenceState = channel.presenceState();
+    const count = Object.keys(presenceState).length;
+    onlineOpponentPresent = count >= 2;
+    if (isLobbyHost && onlineOpponentPresent && !lobbyRoundStarted){
+      lobbyRoundStarted = true;
+      startOnlineLobbyRound();
+    }
+  });
+
+  channel.on('presence', { event: 'leave' }, () => {
+    if ((currentMode === 'friend-lobby' || currentMode === 'battle-pvp-online') && !state.finished){
+      showLobbyError('Your friend disconnected.');
+    }
+  });
+
+  channel.on('broadcast', { event: 'start' }, ({ payload }) => {
+    beginOnlineRound(payload.paragraph);
+  });
+
+  channel.on('broadcast', { event: 'result' }, ({ payload }) => {
+    onlineOpponentStats = payload;
+    maybeShowOnlineResult();
+  });
+
+  channel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED'){
+      await channel.track({ joinedAt: Date.now() });
+      if (asHost){
+        el.lobbyCodeDisplay.textContent = code;
+        setLobbyView('waiting');
+      }
+    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT'){
+      showLobbyError('Connection lost. Check your Supabase credentials and try again.');
+    }
+  });
+
+  lobbyChannel = channel;
+}
+
+function createLobby(){
+  const code = generateLobbyCode();
+  connectToLobby(code, true);
+}
+
+function joinLobbyFromInput(){
+  const code = el.joinLobbyInput.value.trim().toUpperCase();
+  if (code.length < 4){
+    showLobbyError('Enter the full lobby code your friend shared.');
+    return;
+  }
+  connectToLobby(code, false);
+  el.lobbyStatusText.textContent = 'Connecting to lobby\u2026';
+  setLobbyView('waiting');
+  el.lobbyCodeDisplay.textContent = code;
+}
+
+async function startOnlineLobbyRound(){
+  el.lobbyStatusDot.classList.add('connected');
+  el.lobbyStatusText.textContent = 'Friend joined! Loading paragraph\u2026';
+  const paragraph = await fetchRandomParagraph();
+  broadcastLobbyEvent('start', { paragraph });
+  beginOnlineRound(paragraph);
+}
+
+function beginOnlineRound(paragraph){
+  onlineOwnStats = null;
+  onlineOpponentStats = null;
+  lastBattleVariant = 'online'; // keeps the local AI/PVP rematch shortcuts from misfiring after this
+  showScreen('battle-pvp-online');
+  resetTest(paragraph);
+}
+
+function maybeShowOnlineResult(){
+  if (!onlineOwnStats) return; // I haven't finished my own round yet -- nothing to show
+  if (onlineOpponentStats){
+    const mine = onlineOwnStats;
+    const theirs = onlineOpponentStats;
+    let koSide;
+    if (mine.wonAllThreeBars && !theirs.wonAllThreeBars) koSide = 'left';
+    else if (!mine.wonAllThreeBars && theirs.wonAllThreeBars) koSide = 'right';
+    else if (mine.damage === theirs.damage) koSide = 'tie';
+    else koSide = mine.damage > theirs.damage ? 'left' : 'right';
+
+    showBattleResult({
+      leftLabel: 'You', leftWpm: mine.wpm, leftDamage: mine.damage,
+      rightLabel: 'Friend', rightWpm: theirs.wpm, rightDamage: theirs.damage,
+      koSide,
+    });
+  } else {
+    showScreen('friend-lobby');
+    setLobbyView('result-wait');
+  }
+}
+
 function returnFromArena(){
   // stop any running test/timer/bot loop if leaving mid-round, so nothing
   // keeps ticking or firing keydown-driven combat logic in the background
@@ -786,7 +1107,10 @@ function returnFromArena(){
   clearInterval(botTimerId);
   clearTimeout(koResultTimeoutId); // a pending KO result must not fire on a screen we've left
   state.finished = true;
-  if (currentMode === 'battle-ai' || currentMode === 'battle-pvp'){
+  if (currentMode === 'battle-pvp-online'){
+    leaveLobby();
+    showScreen('pvp-select');
+  } else if (currentMode === 'battle-ai' || currentMode === 'battle-pvp'){
     showScreen('battle-select');
   } else {
     showScreen('menu');
@@ -797,6 +1121,7 @@ function goToTopMenu(){
   clearInterval(state.timerId);
   clearInterval(botTimerId);
   clearTimeout(koResultTimeoutId);
+  leaveLobby();
   state.finished = true;
   showScreen('menu');
 }
@@ -815,7 +1140,23 @@ el.backToMenuBtn.addEventListener('click', returnFromArena);
 el.backFromBattleBtn.addEventListener('click', goToTopMenu);
 
 el.selectAiBtn.addEventListener('click', enterBattleAI);
-el.selectPvpBtn.addEventListener('click', enterBattlePVP);
+el.selectPvpBtn.addEventListener('click', enterPvpSubSelect);
+
+el.selectLocalPvpBtn.addEventListener('click', enterBattlePVP);
+el.selectFriendPvpBtn.addEventListener('click', enterFriendLobby);
+// Random matchmaking is a future build (see the mode-select conversation) -- the
+// card is visually disabled and intentionally has no click handler for now.
+el.backFromPvpSubSelectBtn.addEventListener('click', () => showScreen('battle-select'));
+
+el.createLobbyBtn.addEventListener('click', createLobby);
+el.joinLobbyBtn.addEventListener('click', joinLobbyFromInput);
+el.joinLobbyInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') joinLobbyFromInput();
+});
+el.backFromFriendLobbyBtn.addEventListener('click', () => {
+  leaveLobby();
+  showScreen('pvp-select');
+});
 
 el.startPvpRound2Btn.addEventListener('click', () => {
   pvpRound = 2;

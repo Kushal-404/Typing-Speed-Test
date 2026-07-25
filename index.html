@@ -6,6 +6,8 @@
   <title>Typecast — Typing Speed Test</title>
   <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase client (for Play with Friend online lobbies) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <!-- Custom Stylesheet link -->
   <link rel="stylesheet" href="style.css">
   <!-- Google Fonts -->
@@ -62,8 +64,11 @@
     <section class="bg-[var(--card)] border border-[var(--hairline)] rounded-2xl p-5 md:p-6 shadow-2xl shadow-black/40 md:sticky md:top-10">
       <div class="flex items-center justify-between mb-3">
         <h2 class="mono text-[11px] uppercase tracking-widest text-[var(--muted)]">Duel</h2>
+        <span id="normalHitCounter" class="hidden mono text-[11px] text-[var(--muted)]"><span id="hitCount" class="text-[var(--brass)] font-medium">0</span> hits landed</span>
       </div>
-      <div class="space-y-2 mb-3">
+
+      <!-- HP bars: Battle Mode only (AI + PVP), hidden in Normal Mode -->
+      <div id="battleHpBars" class="hidden space-y-2 mb-3">
         <div>
           <div class="flex items-center justify-between mono text-[10px] text-[var(--muted)] mb-1">
             <span id="attackerHpLabel">You</span>
@@ -76,13 +81,17 @@
         <div>
           <div class="flex items-center justify-between mono text-[10px] text-[var(--muted)] mb-1">
             <span id="defenderHpLabel">Opponent</span>
-            <span><span id="defenderHpText">100</span>/100</span>
+            <span class="flex items-center gap-2">
+              <span id="pvpLivesIndicator" class="hidden"><span class="pvp-life"></span><span class="pvp-life"></span><span class="pvp-life"></span></span>
+              <span><span id="defenderHpText">100</span>/100</span>
+            </span>
           </div>
           <div class="hp-bar-track">
             <div id="defenderHpFill" class="hp-bar-fill hp-bar-fill-enemy" style="width:100%"></div>
           </div>
         </div>
       </div>
+
       <div id="pvpTurnBanner" class="hidden mono text-[11px] text-center text-[var(--brass)] bg-[rgba(217,164,65,0.1)] border border-[rgba(217,164,65,0.35)] rounded-md py-1.5 mb-3">
         Player 1's turn
       </div>
@@ -261,12 +270,90 @@
       <button id="selectPvpBtn" class="mode-card">
         <span class="mode-card-icon">&#9876;</span>
         <h2>PVP Mode</h2>
-        <p>Local hot-seat. Player 1 and Player 2 each take a turn on the same paragraph, then compare results.</p>
+        <p>Face another player &mdash; locally, or online with a friend.</p>
         <span class="mode-card-cta">Play &rarr;</span>
       </button>
     </div>
     <button id="backFromBattleBtn" class="mono text-xs text-[var(--muted)] hover:text-[var(--brass)] border border-[var(--hairline)] hover:border-[var(--brass)] rounded-md px-4 py-2 transition-colors">
       &larr; back to menu
+    </button>
+  </div>
+
+  <!-- PVP SUB-SELECT: local hot-seat vs online with a friend vs random matchmaking -->
+  <div id="pvpSubSelectScreen" class="hidden w-full max-w-3xl flex flex-col items-center text-center gap-10 py-10">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-semibold tracking-tight mb-2">PVP Mode</h1>
+      <p class="mono text-sm text-[var(--muted)]">choose how to play</p>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full">
+      <button id="selectLocalPvpBtn" class="mode-card">
+        <span class="mode-card-icon">&#128421;&#65039;</span>
+        <h2>Local</h2>
+        <p>Pass-and-play, hot-seat. Player 1 and Player 2 take turns on the same device.</p>
+        <span class="mode-card-cta">Play &rarr;</span>
+      </button>
+      <button id="selectFriendPvpBtn" class="mode-card">
+        <span class="mode-card-icon">&#128279;</span>
+        <h2>Play with Friend</h2>
+        <p>Generate a lobby code, share it, and race your friend on the same paragraph in real time.</p>
+        <span class="mode-card-cta">Play &rarr;</span>
+      </button>
+      <button id="selectRandomPvpBtn" class="mode-card opacity-60">
+        <span class="mode-card-icon">&#127922;</span>
+        <h2>Random</h2>
+        <p>Matchmaking with another waiting player. Coming soon.</p>
+        <span class="mode-card-cta">Soon</span>
+      </button>
+    </div>
+    <button id="backFromPvpSubSelectBtn" class="mono text-xs text-[var(--muted)] hover:text-[var(--brass)] border border-[var(--hairline)] hover:border-[var(--brass)] rounded-md px-4 py-2 transition-colors">
+      &larr; back
+    </button>
+  </div>
+
+  <!-- FRIEND LOBBY: create or join a room by code -->
+  <div id="friendLobbyScreen" class="hidden w-full max-w-lg flex flex-col items-center text-center gap-6 py-10">
+    <h1 class="text-2xl md:text-3xl font-semibold tracking-tight">Play with Friend</h1>
+
+    <!-- state: choose to create or join -->
+    <div id="lobbyChooseView" class="bg-[var(--card)] border border-[var(--hairline)] rounded-2xl p-8 w-full flex flex-col gap-5">
+      <button id="createLobbyBtn" class="mono text-sm font-semibold text-[#14161a] bg-[var(--brass)] hover:brightness-110 rounded-lg px-6 py-3 transition">
+        Create Lobby
+      </button>
+      <div class="flex items-center gap-3">
+        <div class="h-px flex-1 bg-[var(--hairline)]"></div>
+        <span class="mono text-[11px] text-[var(--muted)]">or</span>
+        <div class="h-px flex-1 bg-[var(--hairline)]"></div>
+      </div>
+      <div class="flex gap-2">
+        <input id="joinLobbyInput" type="text" maxlength="6" placeholder="ENTER CODE" autocomplete="off" autocapitalize="characters"
+          class="flex-1 mono text-center tracking-[0.3em] uppercase bg-[var(--card-2)] border border-[var(--hairline)] rounded-lg px-3 py-3 text-[var(--ink)] focus:outline-none focus:border-[var(--brass)]" />
+        <button id="joinLobbyBtn" class="mono text-sm font-semibold text-[var(--ink)] border border-[var(--hairline)] hover:border-[var(--brass)] rounded-lg px-5 py-3 transition-colors">
+          Join
+        </button>
+      </div>
+    </div>
+
+    <!-- state: waiting for the friend to join -->
+    <div id="lobbyWaitingView" class="hidden bg-[var(--card)] border border-[var(--hairline)] rounded-2xl p-8 w-full flex flex-col items-center gap-4">
+      <p class="mono text-[11px] text-[var(--muted)] uppercase tracking-widest">Lobby code</p>
+      <p id="lobbyCodeDisplay" class="text-4xl font-semibold tracking-[0.3em] text-[var(--brass)]">------</p>
+      <p class="mono text-[11px] text-[var(--muted)]">share this code with your friend</p>
+      <div class="flex items-center gap-2 mono text-[11px] text-[var(--muted)]">
+        <span id="lobbyStatusDot" class="w-2 h-2 rounded-full bg-[var(--muted)] inline-block"></span>
+        <span id="lobbyStatusText">Waiting for friend to join&hellip;</span>
+      </div>
+    </div>
+
+    <!-- state: waiting for the opponent's final result after you've both played -->
+    <div id="lobbyResultWaitView" class="hidden bg-[var(--card)] border border-[var(--hairline)] rounded-2xl p-8 w-full flex flex-col items-center gap-3">
+      <p class="mono text-sm text-[var(--ink)]">You're done! Waiting on your friend&hellip;</p>
+      <p class="mono text-[11px] text-[var(--muted)]" id="lobbyResultWaitSub">Results will appear the moment they finish.</p>
+    </div>
+
+    <p id="lobbyErrorText" class="hidden mono text-[11px] text-[var(--bad)]"></p>
+
+    <button id="backFromFriendLobbyBtn" class="mono text-xs text-[var(--muted)] hover:text-[var(--brass)] border border-[var(--hairline)] hover:border-[var(--brass)] rounded-md px-4 py-2 transition-colors">
+      &larr; back
     </button>
   </div>
 
