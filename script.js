@@ -528,6 +528,13 @@ function updateLiveStats(){
   el.liveAcc.textContent = acc;
 }
  
+// Handles ONLY the Tab+Enter restart shortcut. Deliberately does NOT
+// preventDefault() on printable characters or Backspace anymore --
+// doing so would suppress the browser's default text-insertion
+// behavior, which is exactly what triggers the 'input' event below.
+// Physical keyboards fire both keydown and input; mobile virtual
+// keyboards often only fire input reliably -- so all actual game
+// logic now lives in handleHiddenInput instead, to work on both.
 function handleKeydown(e){
   if (!ARENA_MODES.includes(currentMode)) return;
   if (state.finished || state.koPending) return;
@@ -542,9 +549,18 @@ function handleKeydown(e){
     return;
   }
   if (e.key !== 'Tab') state.tabPressed = false;
- 
-  if (e.key === 'Backspace'){
-    e.preventDefault();
+}
+
+// Fires on real text-content changes to the hidden input -- reliable
+// across physical keyboards AND mobile virtual keyboards, unlike
+// keydown. The field is cleared after every keystroke so it never
+// accumulates more than one character between reads.
+function handleHiddenInput(e){
+  if (!ARENA_MODES.includes(currentMode)) return;
+  if (state.finished || state.koPending) return;
+
+  if (e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward'){
+    el.hiddenInput.value = '';
     if (state.typedChars.length > 0){
       const removed = state.typedChars.pop();
       state.totalTyped -= 1;
@@ -558,39 +574,42 @@ function handleKeydown(e){
     }
     return;
   }
- 
-  if (e.key.length !== 1) return;
-  e.preventDefault();
- 
+
+  const value = el.hiddenInput.value;
+  el.hiddenInput.value = ''; // clear immediately so the buffer never grows past one character
+  if (!value) return; // composition-only events etc with no actual character
+
+  const typedChar = value.slice(-1); // the most recently typed character
+
   if (!state.currentText) return; // paragraph still loading — ignore keystrokes, don't start the clock
   if (!state.started) startTimer();
- 
+
   const idx = state.typedChars.length;
-  if (idx >= state.currentText.length) return; 
- 
+  if (idx >= state.currentText.length) return;
+
   const expected = state.currentText[idx];
-  const isCorrect = e.key === expected;
- 
-  state.typedChars.push({ char: e.key, correct: isCorrect });
+  const isCorrect = typedChar === expected;
+
+  state.typedChars.push({ char: typedChar, correct: isCorrect });
   state.totalTyped += 1;
   if (isCorrect){
     state.totalCorrect += 1;
   } else {
     state.totalErrors += 1;
   }
- 
+
   const span = el.textDisplay.children[idx];
   span.className = isCorrect ? "char-correct" : "char-incorrect";
- 
+
   updateCurrentCharMarker();
   updateLiveStats();
- 
+
   if (isCorrect){
     triggerAttack();
   } else {
     triggerMiss();
   }
- 
+
   const reachedEnd = state.typedChars.length >= state.currentText.length;
   if (reachedEnd){
     finishTest();
@@ -1207,6 +1226,7 @@ function goToTopMenu(){
    WIRE UP
 --------------------------------------------------------- */
 document.addEventListener('keydown', handleKeydown);
+el.hiddenInput.addEventListener('input', handleHiddenInput);
 document.addEventListener('click', focusInput);
 el.restartBtn.addEventListener('click', restartCurrentRound);
 el.tryAgainBtn.addEventListener('click', restartCurrentRound);

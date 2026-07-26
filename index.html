@@ -197,9 +197,11 @@
  
       <!-- Text display -->
       <div class="relative">
-        <p id="textDisplay" class="mono text-lg md:text-2xl leading-relaxed md:leading-loose tracking-wide select-none" style="letter-spacing:0.02em;"></p>
+        <p id="textDisplay" class="mono text-lg md:text-2xl leading-relaxed md:leading-loose tracking-wide select-none"
+          style="letter-spacing:0.02em; position:relative; z-index:1; pointer-events:none;"></p>
         <input id="hiddenInput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-          class="absolute opacity-0 pointer-events-none top-0 left-0 w-1 h-1" />
+          style="font-size:16px;"
+          class="absolute opacity-0 inset-0 w-full h-full z-10 cursor-text" />
       </div>
  
       <!-- Footer controls -->
