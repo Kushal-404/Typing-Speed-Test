@@ -555,12 +555,30 @@ function handleKeydown(e){
 // across physical keyboards AND mobile virtual keyboards, unlike
 // keydown. The field is cleared after every keystroke so it never
 // accumulates more than one character between reads.
+// A permanently-empty field means Backspace has nothing to delete --
+// deleting nothing from nothing is a no-op change, and browsers don't
+// fire 'input' for a no-op, so Backspace would silently do nothing.
+// Keeping one invisible sentinel character in the field at all times
+// guarantees there's always something for Backspace to actually
+// remove, so the event reliably fires.
+const INPUT_SENTINEL = '\u200B'; // zero-width space -- invisible, never appears in real paragraph text
+
+function resetHiddenInputBuffer(){
+  el.hiddenInput.value = INPUT_SENTINEL;
+  try {
+    el.hiddenInput.setSelectionRange(1, 1); // cursor after the sentinel, so new characters append rather than insert before it
+  } catch (err) { /* setSelectionRange can throw in rare edge cases -- harmless to ignore */ }
+}
+
 function handleHiddenInput(e){
   if (!ARENA_MODES.includes(currentMode)) return;
   if (state.finished || state.koPending) return;
 
-  if (e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward'){
-    el.hiddenInput.value = '';
+  const value = el.hiddenInput.value;
+  const isBackspace = value.length === 0 || e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward';
+
+  if (isBackspace){
+    resetHiddenInputBuffer();
     if (state.typedChars.length > 0){
       const removed = state.typedChars.pop();
       state.totalTyped -= 1;
@@ -575,11 +593,9 @@ function handleHiddenInput(e){
     return;
   }
 
-  const value = el.hiddenInput.value;
-  el.hiddenInput.value = ''; // clear immediately so the buffer never grows past one character
-  if (!value) return; // composition-only events etc with no actual character
-
-  const typedChar = value.slice(-1); // the most recently typed character
+  const typedChar = value.slice(-1); // the most recently typed character (appended after the sentinel)
+  resetHiddenInputBuffer();
+  if (!typedChar) return; // composition-only events etc with no actual character
 
   if (!state.currentText) return; // paragraph still loading — ignore keystrokes, don't start the clock
   if (!state.started) startTimer();
@@ -938,6 +954,7 @@ async function resetTest(forcedText){
 function focusInput(){
   if (!ARENA_MODES.includes(currentMode)) return;
   el.hiddenInput.focus({ preventScroll: true });
+  resetHiddenInputBuffer();
 }
 
 /* ---------------------------------------------------------
