@@ -1,27 +1,74 @@
 /* ---------------------------------------------------------
    UI VARIABLES & CONFIG
+   Retro GBA Pokémon menu-screen theme (Fire Red / Leaf Green / Ruby /
+   Sapphire era). Modeled on the classic navy party/menu box rather
+   than the light dialogue textbox, since that keeps the exact same
+   light-text-on-dark-panel structure already used everywhere in this
+   codebase -- retheming by changing hex values only, nothing needs
+   to be inverted or hunted down individually.
 --------------------------------------------------------- */
 :root {
-  --bg: #101216;
-  --card: #1a1d22;
-  --card-2: #20242a;
-  --hairline: #2b2f36;
-  --muted: #5b616c;
-  --ink: #f2f1ec;
-  --brass: #d9a441;
-  --brass-dim: #8a713a;
-  --good: #4ade80;
-  --bad: #ef4444;
-  --bad-bg: rgba(239, 68, 68, 0.12);
+  --bg: #0f1c33;
+  --card: #16294a;
+  --card-2: #1f3860;
+  --hairline: #3a5480;
+  --muted: #93a8c9;
+  --ink: #f4f6fb;
+  --brass: #f0b83c;
+  --brass-dim: #a87d20;
+  --good: #5cc75c;
+  --bad: #e0503c;
+  --bad-bg: rgba(224, 80, 60, 0.18);
   
   /* Re-engineered Proportions - Taller stance, balanced build */
-  --s-color: #9aa0aa;
+  --s-color: #dfe8f5;
   --s-thick: 4px;
 }
 
 html, body { background: var(--bg); overflow-x: hidden; }
-body { font-family: 'Space Grotesk', sans-serif; }
-.mono { font-family: 'JetBrains Mono', monospace; }
+body { font-family: 'VT323', monospace; }
+.mono { font-family: 'VT323', monospace; }
+
+/* ---------------------------------------------------------
+   RETRO PIXEL-UI OVERRIDES
+   GBA-era Pokémon UI never has rounded corners or hairline borders --
+   panels are square with a thick, beveled double-line frame. These
+   global overrides retheme every existing panel/button that already
+   uses Tailwind's .border and .rounded-* utilities, without having
+   to hunt down and edit each individual element in the markup.
+--------------------------------------------------------- */
+.border {
+  border-width: 4px !important;
+  box-shadow: inset 0 0 0 2px var(--card-2);
+}
+[class*="rounded"]:not([class*="rounded-full"]) { border-radius: 0 !important; }
+
+/* Chunky "physical button press" feedback -- safe and universal across
+   every button regardless of its own padding (unlike an absolutely
+   positioned arrow, which would need per-button coordination). */
+button {
+  transition: transform 80ms steps(2), filter 80ms steps(2);
+}
+button:hover:not(:disabled) { filter: brightness(1.12); }
+button:active:not(:disabled) { transform: translateY(2px); }
+
+/* the classic Pokémon menu selector arrow -- scoped to the one spot
+   guaranteed to have consistent, predictable spacing around it */
+.mode-card-cta { position: relative; padding-left: 14px; }
+.mode-card-cta::before {
+  content: '\25b6';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  opacity: 0;
+  transition: opacity 120ms steps(2), transform 120ms steps(2);
+}
+.mode-card:hover .mode-card-cta::before,
+.mode-card:focus-visible .mode-card-cta::before {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
 
 /* Typing Interface Base Layouts */
 .paper-rail {
@@ -38,7 +85,7 @@ body { font-family: 'Space Grotesk', sans-serif; }
   height: 10px;
   background: var(--brass);
   border-radius: 2px;
-  box-shadow: 0 0 0 4px rgba(217, 164, 65, 0.15), 0 0 14px rgba(217, 164, 65, 0.5);
+  box-shadow: 0 0 0 4px rgba(240, 184, 60, 0.15), 0 0 14px rgba(240, 184, 60, 0.5);
   transition: left 150ms ease-out;
 }
 .char-pending { color: var(--muted); }
@@ -55,7 +102,7 @@ body { font-family: 'Space Grotesk', sans-serif; }
 }
 @keyframes blink { 50% { opacity: 0; } }
 .key-hint {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'VT323', monospace;
   font-size: 11px;
   border: 1px solid var(--hairline);
   background: var(--card-2);
@@ -67,7 +114,7 @@ body { font-family: 'Space Grotesk', sans-serif; }
 .time-pill.active { background: var(--brass); color: #14161a; font-weight: 600; }
 .fade-in { animation: fadeIn 320ms ease both; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-::selection { background: rgba(217, 164, 65, 0.35); }
+::selection { background: rgba(240, 184, 60, 0.35); }
 #comboBadge { transition: opacity 150ms ease, transform 150ms ease; letter-spacing: 0.08em; }
 #comboBadge.hidden-badge { opacity: 0; transform: translateY(-3px); }
 
@@ -98,19 +145,19 @@ body { font-family: 'Space Grotesk', sans-serif; }
   line-height: 1;
 }
 .mode-card h2 {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'VT323', monospace;
   font-weight: 600;
   font-size: 17px;
   color: var(--ink);
 }
 .mode-card p {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'VT323', monospace;
   font-size: 12px;
   color: var(--muted);
   line-height: 1.5;
 }
 .mode-card-cta {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'VT323', monospace;
   font-size: 12px;
   color: var(--brass);
   margin-top: 4px;
@@ -131,10 +178,11 @@ body { font-family: 'Space Grotesk', sans-serif; }
 }
 .hp-bar-fill {
   height: 100%;
-  transition: width 300ms ease-out;
+  transition: width 300ms ease-out, background-color 200ms ease;
+  background: var(--good);
 }
-.hp-bar-fill-player { background: var(--brass); }
-.hp-bar-fill-enemy { background: var(--bad); }
+.hp-bar-fill.hp-mid { background: #e8d030; }
+.hp-bar-fill.hp-low { background: var(--bad); }
 .hp-bar-fill.low {
   animation: hpLowPulse 0.9s ease-in-out infinite;
 }
