@@ -228,7 +228,9 @@ function updateHpBar(fillEl, textEl, hp){
   const pct = Math.max(0, Math.min(100, hp));
   fillEl.style.width = pct + '%';
   textEl.textContent = Math.round(pct);
-  fillEl.classList.toggle('low', pct > 0 && pct <= 25);
+  fillEl.classList.toggle('low', pct > 0 && pct <= 25); // pulse warning
+  fillEl.classList.toggle('hp-mid', pct > 0 && pct <= 50 && pct > 20);
+  fillEl.classList.toggle('hp-low', pct > 0 && pct <= 20);
 }
 
 function updatePvpLivesIndicator(){
@@ -478,6 +480,59 @@ async function fetchRandomParagraph(){
   }
 }
  
+/* ---------------------------------------------------------
+   CONTINUOUS PARAGRAPH FLOW
+   Finishing the current paragraph before time runs out loads the next
+   one automatically instead of ending the round. The next paragraph
+   is fetched in the background well before it's needed, so there's no
+   visible pause when it's appended -- if the fetch somehow hasn't
+   resolved yet, a local paragraph is used instantly as a fallback
+   (network fetches are never on the critical path for continuing).
+--------------------------------------------------------- */
+let preloadedNextText = null;
+let preloadInFlight = false;
+let paragraphSegmentStart = 0; // where the CURRENT paragraph segment begins within state.currentText -- keeps the duel progress bar showing per-paragraph progress instead of shrinking every time more text is appended
+
+async function preloadNextParagraph(){
+  if (preloadInFlight || preloadedNextText) return;
+  preloadInFlight = true;
+  const text = await fetchRandomParagraph();
+  preloadedNextText = text;
+  preloadInFlight = false;
+}
+
+function takePreloadedText(){
+  if (preloadedNextText){
+    const text = preloadedNextText;
+    preloadedNextText = null;
+    return text; // already fetched -- zero delay
+  }
+  return pickParagraph(); // fetch hadn't finished yet -- use a local paragraph instantly rather than making the player wait
+}
+
+function extendParagraph(){
+  const nextText = takePreloadedText();
+  const separator = '  ';
+  const startIdx = state.currentText.length;
+  const addition = separator + nextText;
+
+  state.currentText += addition;
+  paragraphSegmentStart = startIdx + separator.length;
+
+  const frag = document.createDocumentFragment();
+  addition.split('').forEach((ch, i) => {
+    const span = document.createElement('span');
+    span.textContent = ch;
+    span.dataset.index = startIdx + i;
+    span.className = "char-pending";
+    frag.appendChild(span);
+  });
+  el.textDisplay.appendChild(frag);
+  updateCurrentCharMarker();
+
+  preloadNextParagraph(); // top up the pipeline for next time
+}
+
 function renderText(){
   el.textDisplay.innerHTML = "";
   const frag = document.createDocumentFragment();
@@ -498,7 +553,9 @@ function updateCurrentCharMarker(){
   Array.from(spans).forEach(s => s.classList.remove('char-current'));
   if (spans[idx]) spans[idx].classList.add('char-current');
   
-  updateStageProgression(idx, state.currentText.length);
+  const segmentIdx = idx - paragraphSegmentStart;
+  const segmentTotal = state.currentText.length - paragraphSegmentStart;
+  updateStageProgression(segmentIdx, segmentTotal);
 }
  
 function startTimer(){
@@ -627,8 +684,12 @@ function handleHiddenInput(e){
   }
 
   const reachedEnd = state.typedChars.length >= state.currentText.length;
-  if (reachedEnd){
-    finishTest();
+  if (reachedEnd && !state.koPending){
+    if (state.timeLeft > 0 && !state.finished){
+      extendParagraph();
+    } else {
+      finishTest();
+    }
   }
 }
  
@@ -872,6 +933,9 @@ async function resetTest(forcedText){
   clearTimeout(botActionTimeout);
   clearTimeout(remoteActionTimeout);
   clearTimeout(koResultTimeoutId);
+  paragraphSegmentStart = 0;
+  preloadedNextText = null;
+  preloadInFlight = false;
   state = {
     selectedTime: state.selectedTime,
     timeLeft: state.selectedTime,
@@ -935,6 +999,7 @@ async function resetTest(forcedText){
     el.textDisplay.style.letterSpacing = '0.02em';
     renderText();
     focusInput();
+    preloadNextParagraph();
     return;
   }
 
@@ -949,6 +1014,7 @@ async function resetTest(forcedText){
   el.textDisplay.style.letterSpacing = '0.02em';
   renderText();
   focusInput();
+  preloadNextParagraph();
 }
  
 function focusInput(){
