@@ -1,4 +1,10 @@
 /* ---------------------------------------------------------
+   AUDIO
+--------------------------------------------------------- */
+// Referencing the exact file from an external folder as requested
+const mistypeSound = new Audio('../sounds/Bruh.mp3');
+
+/* ---------------------------------------------------------
    DATA
 --------------------------------------------------------- */
 const PARAGRAPHS = [
@@ -379,6 +385,11 @@ function triggerAttack(){
 }
  
 function triggerMiss(){
+  // --- NEW AUDIO LOGIC ---
+  mistypeSound.currentTime = 0; // Rewind to start so rapid mistypes overlap correctly
+  mistypeSound.play().catch(err => console.warn('Audio playback prevented by browser:', err));
+  // -----------------------
+
   combo = 0;
   el.comboCount.textContent = 0;
   el.comboBadge.classList.add('hidden-badge');
