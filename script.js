@@ -38,7 +38,6 @@ function isPvpMode(mode){
 
 // AI Mode: simulated bot opponent
 let botTimerId = null;
-let botActionTimeout = null;
 let botCharsTyped = 0;
 let botStartTime = 0;
 let botTargetWpm = 0;
@@ -117,6 +116,7 @@ const el = {
   sword: document.getElementById('sword'),
   stageWrapper: document.getElementById('stageWrapper'),
   duelContainer: document.getElementById('duelContainer'),
+  hitFlash: document.getElementById('hitFlash'),
   spark: document.getElementById('spark'),
   normalHitCounter: document.getElementById('normalHitCounter'),
   hitCount: document.getElementById('hitCount'),
@@ -181,7 +181,7 @@ const el = {
  
 let hitCount = 0; // still drives ATTACK_TYPES cycling; no longer displayed directly
 let combo = 0;
-let actionTimeout = null;
+let missTimeoutId = null; // strips the miss pose; separate from the attack swing timers in combatTimers
 let consecutiveMisses = 0;
 
 /* ---------------------------------------------------------
@@ -322,10 +322,27 @@ function triggerKO(winnerSide){
 
 const ATTACK_TYPES = ['atk-thrust', 'atk-crosscut', 'atk-kick', 'atk-slash'];
 const ATTACK_DURATIONS = { 'atk-thrust': 160, 'atk-crosscut': 180, 'atk-kick': 200, 'atk-slash': 180 };
+// The exact point (0-1) along each swing's own timeline where the blade
+// (or kicking foot) actually connects -- matches the impact keyframe
+// already built into that attack's CSS animation (thrustArm/crossArm/
+// snapKickUpper/slashArmU). Every impact-synced effect below fires off
+// of this, never at swing-start, so nothing lands before visual contact.
+const ATTACK_IMPACT_AT = { 'atk-thrust': 0.46, 'atk-crosscut': 0.50, 'atk-kick': 0.45, 'atk-slash': 0.58 };
+const HITSTOP_MS = 55; // brief freeze held on the impact frame -- timing only, no animation is altered
  
 /* ---------------------------------------------------------
    COMBAT ENGINE
 --------------------------------------------------------- */
+// Per-fighter timer registry: 'strip' clears the attack class once the
+// swing animation finishes, 'impact' fires the impact-frame effects.
+// Keeping these separate per actor (rather than one shared variable)
+// means the player's swing timers and the opponent's never race or
+// clobber each other.
+const combatTimers = {
+  attacker: { strip: null, impact: null },
+  defender: { strip: null, impact: null },
+};
+
 function pulse(elm, cls){
   elm.classList.remove(cls);
   void elm.getBoundingClientRect(); 
@@ -342,46 +359,90 @@ function positionSpark() {
   el.spark.style.bottom = impactY + 'px';
 }
 
+// Hit pause: briefly freezes every running combat animation right on
+// the impact frame. Pure timing -- pauses/resumes playback, doesn't
+// change what any animation looks like.
+let hitStopTimeoutId = null;
+function triggerHitPause(ms){
+  clearTimeout(hitStopTimeoutId);
+  el.duelContainer.classList.add('hit-stop');
+  hitStopTimeoutId = setTimeout(() => {
+    el.duelContainer.classList.remove('hit-stop');
+  }, ms);
+}
+
+function clearAllCombatTimers(){
+  Object.values(combatTimers).forEach(t => { clearTimeout(t.strip); clearTimeout(t.impact); });
+  clearTimeout(hitStopTimeoutId);
+  clearTimeout(missTimeoutId);
+  el.duelContainer.classList.remove('hit-stop');
+}
+
+// Starts a swing immediately -- same classes, same CSS animation, same
+// duration as before -- but schedules every impact-synced effect
+// (spark, hit flash, hit pause, and whatever onImpact adds: recoil/
+// knockback, combo feedback, damage) to fire on that swing's actual
+// impact frame instead of at swing-start. Shared by the player's own
+// attacks and the opponent's (bot or remote) so both directions of
+// combat land on frame-accurate timing instead of duplicating this
+// scheduling logic three times.
+function scheduleSwing(actorKey, actorEl, type, footwork, onImpact){
+  const timers = combatTimers[actorKey];
+
+  clearTimeout(timers.strip);
+  actorEl.classList.remove(...ATTACK_TYPES);
+  pulse(actorEl, type);
+  if (footwork) pulse(actorEl, 'lunge-step');
+
+  const duration = ATTACK_DURATIONS[type];
+  const impactDelay = Math.round(duration * ATTACK_IMPACT_AT[type]);
+
+  clearTimeout(timers.impact);
+  timers.impact = setTimeout(() => {
+    positionSpark();
+    pulse(el.spark, 'spark-show');
+    pulse(el.hitFlash, 'hit-flash-show');
+    triggerHitPause(HITSTOP_MS);
+    onImpact();
+  }, impactDelay);
+
+  timers.strip = setTimeout(() => {
+    actorEl.classList.remove(type);
+  }, duration);
+}
+
 function triggerAttack(){
   hitCount += 1;
-  combo += 1;
   consecutiveMisses = 0;
   el.hitCount.textContent = hitCount;
-  el.comboCount.textContent = combo;
-  el.comboBadge.classList.toggle('hidden-badge', combo < 8);
-  
+
   const type = ATTACK_TYPES[hitCount % ATTACK_TYPES.length];
-  
-  clearTimeout(actionTimeout);
-  // Strip active frames down to process incoming hit instantly
-  el.attacker.classList.remove(...ATTACK_TYPES);
-  pulse(el.attacker, type);
-  pulse(el.attacker, 'lunge-step');
-  
-  const kb = Math.min(combo * 0.9, 16); 
-  el.defender.style.setProperty('--kb', kb + 'px');
-  pulse(el.defender, 'state-hit');
-  
-  positionSpark();
-  pulse(el.spark, 'spark-show');
 
-  actionTimeout = setTimeout(() => {
-    el.attacker.classList.remove(type);
-  }, ATTACK_DURATIONS[type]);
+  scheduleSwing('attacker', el.attacker, type, true, () => {
+    // Combo feedback, enemy recoil/knockback, and damage all now land
+    // on the strike frame rather than at keystroke time.
+    combo += 1;
+    el.comboCount.textContent = combo;
+    el.comboBadge.classList.toggle('hidden-badge', combo < 8);
 
-  // HP/damage only exists in Battle Mode (AI + PVP) -- Normal Mode is
-  // purely a typing test with visual flavor, no win/lose condition
-  if (currentMode !== 'normal'){
-    const dmg = playerDamage();
-    applyDamage('defender', dmg);
-    if (currentMode === 'battle-pvp-online'){
-      // send the exact number dealt, not just a "hit happened" ping --
-      // the friend's client applies this value directly rather than
-      // recomputing it, so both sides can never drift out of sync
-      console.log('[lobby] sending hit broadcast:', dmg);
-      broadcastLobbyEvent('hit', { damage: dmg });
+    const kb = Math.min(combo * 0.9, 16);
+    el.defender.style.setProperty('--kb', kb + 'px');
+    pulse(el.defender, 'state-hit'); // enemy recoil
+
+    // HP/damage only exists in Battle Mode (AI + PVP) -- Normal Mode is
+    // purely a typing test with visual flavor, no win/lose condition
+    if (currentMode !== 'normal'){
+      const dmg = playerDamage();
+      applyDamage('defender', dmg);
+      if (currentMode === 'battle-pvp-online'){
+        // send the exact number dealt, not just a "hit happened" ping --
+        // the friend's client applies this value directly rather than
+        // recomputing it, so both sides can never drift out of sync
+        console.log('[lobby] sending hit broadcast:', dmg);
+        broadcastLobbyEvent('hit', { damage: dmg });
+      }
     }
-  }
+  });
 }
  
 function triggerMiss(){
@@ -393,12 +454,13 @@ function triggerMiss(){
   combo = 0;
   el.comboCount.textContent = 0;
   el.comboBadge.classList.add('hidden-badge');
-  clearTimeout(actionTimeout);
+  clearTimeout(combatTimers.attacker.strip);
+  clearTimeout(missTimeoutId);
   el.attacker.classList.remove(...ATTACK_TYPES);
   pulse(el.attacker, 'state-miss');
   pulse(el.defender, 'state-gloat');
 
-  actionTimeout = setTimeout(() => {
+  missTimeoutId = setTimeout(() => {
     el.attacker.classList.remove('state-miss');
   }, 250);
 
@@ -413,6 +475,7 @@ function triggerMiss(){
     }
   }
 }
+
 
 function updateStageProgression(idx, total) {
     if (total === 0) return;
@@ -715,21 +778,17 @@ function handleHiddenInput(e){
 function triggerBotAttack(){
   if (koTriggered) return; // don't play a bot attack after the round's already decided
   const type = ATTACK_TYPES[botCharsTyped % ATTACK_TYPES.length];
-  clearTimeout(botActionTimeout);
-  el.defender.classList.remove(...ATTACK_TYPES);
-  pulse(el.defender, type);
-  botActionTimeout = setTimeout(() => {
-    el.defender.classList.remove(type);
-  }, ATTACK_DURATIONS[type]);
 
-  // attacker takes the hit, knocked back to the LEFT (negative, away
-  // from the defender) -- mirrors the positive/rightward knockback
-  // the defender takes when the player lands a hit
-  const kb = Math.min(12 + botCharsTyped * 0.4, 30);
-  el.attacker.style.setProperty('--kb', (-kb).toFixed(1) + 'px');
-  pulse(el.attacker, 'state-hit');
+  scheduleSwing('defender', el.defender, type, false, () => {
+    // attacker takes the hit, knocked back to the LEFT (negative, away
+    // from the defender) -- mirrors the positive/rightward knockback
+    // the defender takes when the player lands a hit
+    const kb = Math.min(12 + botCharsTyped * 0.4, 30);
+    el.attacker.style.setProperty('--kb', (-kb).toFixed(1) + 'px');
+    pulse(el.attacker, 'state-hit'); // player recoil
 
-  applyDamage('attacker', BOT_HIT_DAMAGE);
+    applyDamage('attacker', BOT_HIT_DAMAGE);
+  });
 }
 
 // Online PVP: mirrors triggerBotAttack's visual pattern exactly, but is
@@ -737,24 +796,19 @@ function triggerBotAttack(){
 // simulated bot timer. The damage amount is transmitted rather than
 // recomputed locally, so both clients always agree on the exact number.
 let remoteHitsReceived = 0;
-let remoteActionTimeout = null;
 
 function applyRemoteHit(damage){
   if (koTriggered) return;
   remoteHitsReceived += 1;
   const type = ATTACK_TYPES[remoteHitsReceived % ATTACK_TYPES.length];
-  clearTimeout(remoteActionTimeout);
-  el.defender.classList.remove(...ATTACK_TYPES);
-  pulse(el.defender, type);
-  remoteActionTimeout = setTimeout(() => {
-    el.defender.classList.remove(type);
-  }, ATTACK_DURATIONS[type]);
 
-  const kb = Math.min(12 + remoteHitsReceived * 0.4, 30);
-  el.attacker.style.setProperty('--kb', (-kb).toFixed(1) + 'px');
-  pulse(el.attacker, 'state-hit');
+  scheduleSwing('defender', el.defender, type, false, () => {
+    const kb = Math.min(12 + remoteHitsReceived * 0.4, 30);
+    el.attacker.style.setProperty('--kb', (-kb).toFixed(1) + 'px');
+    pulse(el.attacker, 'state-hit'); // player recoil
 
-  applyDamage('attacker', damage);
+    applyDamage('attacker', damage);
+  });
 }
 
 function botTick(){
@@ -859,8 +913,8 @@ function finishTest(){
   clearInterval(state.timerId);
   clearInterval(botTimerId);
   
-  clearTimeout(actionTimeout);
-  clearTimeout(botActionTimeout);
+  clearAllCombatTimers();
+  el.hitFlash.classList.remove('hit-flash-show');
   el.attacker.classList.remove(...ATTACK_TYPES, 'state-miss', 'state-hit', 'lunge-step');
   el.defender.classList.remove(...ATTACK_TYPES, 'state-hit', 'state-gloat');
   el.attacker.classList.add('pose-clash');
@@ -941,8 +995,7 @@ async function resetTest(forcedText){
   const myGeneration = ++resetGeneration;
   clearInterval(state.timerId);
   clearInterval(botTimerId);
-  clearTimeout(botActionTimeout);
-  clearTimeout(remoteActionTimeout);
+  clearAllCombatTimers();
   clearTimeout(koResultTimeoutId);
   paragraphSegmentStart = 0;
   preloadedNextText = null;
@@ -987,7 +1040,7 @@ async function resetTest(forcedText){
   updateMyLivesIndicator();
   botCharsTyped = 0;
   el.botWpm.textContent = 0;
-  clearTimeout(actionTimeout);
+  el.hitFlash.classList.remove('hit-flash-show');
   el.hitCount.textContent = 0;
   el.comboCount.textContent = 0;
   el.comboBadge.classList.add('hidden-badge');

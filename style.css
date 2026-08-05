@@ -395,64 +395,209 @@ button:active:not(:disabled) { transform: translateY(2px); }
    INSTANT combat frames (Leg animations trigger ONLY here)
 --------------------------------------------------------- */
 
-/* -- ATTACK 1: THRUST LUNGE -- */
-.atk-thrust .torso { transform: rotate(10deg); }
-/* Front leg drives forward into the lunge */
-.atk-thrust .leg.right { transform: rotate(48deg); }
-.atk-thrust .leg.right .lower { transform: rotate(10deg); }
-/* Back leg stretches out behind */
-.atk-thrust .leg.left { transform: rotate(-50deg); }
-.atk-thrust .leg.left .lower { transform: rotate(15deg); }
-/* Blade snaps straight out and back */
+/* -- ATTACK 1: THRUST LUNGE --
+   Weighted swing: a brief pull-back anticipation (18%) winds the blade
+   the "wrong" way before the fast whip into full extension (46%, same
+   relative impact point the old single-peak version used), then a
+   rebound overshoot (72%) sells the recoil of the strike before easing
+   back to guard. Torso now animates in lockstep with the arm instead
+   of snapping to a static angle, so the whole upper body sells the
+   thrust rather than just the blade. Duration/outer easing unchanged. */
+.atk-thrust .torso { animation: thrustTorso 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+/* Front leg drives forward into the lunge; back leg stretches out
+   behind — both now load (knees bend, weight sinks back) before the
+   drive and rebalance afterward instead of snapping to one static
+   angle, so the legs visibly share the work with the arm. */
+.atk-thrust .leg.right { animation: thrustLegFront 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.atk-thrust .leg.right .lower { animation: thrustLegFrontLower 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.atk-thrust .leg.left { animation: thrustLegBack 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.atk-thrust .leg.left .lower { animation: thrustLegBackLower 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes thrustLegFront {
+  0%   { transform: rotate(26deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  18%  { transform: rotate(18deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }  /* loads */
+  46%  { transform: rotate(48deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* plants into the lunge */
+  72%  { transform: rotate(40deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* rebalances */
+  100% { transform: rotate(26deg); }
+}
+@keyframes thrustLegFrontLower {
+  0%   { transform: rotate(15deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  18%  { transform: rotate(30deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  46%  { transform: rotate(10deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  72%  { transform: rotate(14deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(15deg); }
+}
+@keyframes thrustLegBack {
+  0%   { transform: rotate(-32deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  18%  { transform: rotate(-24deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  46%  { transform: rotate(-50deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  72%  { transform: rotate(-44deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-32deg); }
+}
+@keyframes thrustLegBackLower {
+  0%   { transform: rotate(38deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  18%  { transform: rotate(45deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  46%  { transform: rotate(15deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  72%  { transform: rotate(20deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(38deg); }
+}
+/* Neck/head lag a beat behind the torso, then whip through on impact —
+   the small delay between body and head is what makes the strike read
+   as connected motion instead of one rigid rotating block. */
+.atk-thrust .head { animation: thrustHead 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes thrustHead {
+  0%   { transform: rotate(0deg);  animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  18%  { transform: rotate(-2deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }  /* lags on the wind-up */
+  46%  { transform: rotate(6deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* whips through with the strike */
+  72%  { transform: rotate(1deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(0deg); }
+}
+/* Blade winds back, whips out, rebounds */
 .atk-thrust .arm.right { animation: thrustArm 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .atk-thrust .sword { animation: thrustSword 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
 /* Off-hand rides along on the second grip, matching the sword arm's motion */
 .atk-thrust .arm.left { animation: bothHandsThrust 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes thrustTorso {
+  0%   { transform: rotate(0deg);   animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  18%  { transform: rotate(-4deg);  animation-timing-function: cubic-bezier(.55,0,.1,1); }  /* anticipation: coil back */
+  46%  { transform: rotate(13deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* impact: drives into the thrust */
+  72%  { transform: rotate(4deg);   animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* rebound */
+  100% { transform: rotate(0deg); }
+}
 @keyframes thrustArm {
-  0%, 100% { transform: rotate(-20deg); }
-  45% { transform: rotate(-55deg); }
+  0%   { transform: rotate(-20deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  18%  { transform: rotate(-9deg);  animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  46%  { transform: rotate(-60deg); animation-timing-function: cubic-bezier(.16,1,.3,1); } /* straightens toward the target */
+  72%  { transform: rotate(-27deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-20deg); }
 }
 @keyframes thrustSword {
-  0%, 100% { transform: rotate(-150deg); }
-  45% { transform: rotate(-140deg); } /* straightens toward the target */
+  0%   { transform: rotate(-150deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  18%  { transform: rotate(-156deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  46%  { transform: rotate(-136deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  72%  { transform: rotate(-152deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-150deg); }
 }
 @keyframes bothHandsThrust {
-  0%, 100% { transform: rotate(-16deg); }
-  45% { transform: rotate(-51deg); }
+  0%   { transform: rotate(-16deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  18%  { transform: rotate(-5deg);  animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  46%  { transform: rotate(-56deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  72%  { transform: rotate(-23deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-16deg); }
 }
 
-/* -- ATTACK 2: CROSS SLASH -- */
-.atk-crosscut .torso { transform: rotate(-8deg); }
-.atk-crosscut .leg.right { transform: rotate(40deg); }
-.atk-crosscut .leg.right .lower { transform: rotate(10deg); }
-.atk-crosscut .leg.left { transform: rotate(-40deg); }
-.atk-crosscut .leg.left .lower { transform: rotate(20deg); }
-/* Blade sweeps sideways across the body */
+/* -- ATTACK 2: CROSS SLASH --
+   Same weighted shape as the thrust: wind-up opposite the swing (16%),
+   fast whip through the same impact point the old version used (50%),
+   then a follow-through overshoot (75%) before the blade eases back to
+   guard. Torso is keyframed rather than static so the shoulders visibly
+   drive the sideways sweep. Duration/outer easing unchanged. */
+.atk-crosscut .torso { animation: crossTorso 0.18s ease-out; }
+.atk-crosscut .leg.right { animation: crossLegFront 0.18s ease-out; }
+.atk-crosscut .leg.right .lower { animation: crossLegFrontLower 0.18s ease-out; }
+.atk-crosscut .leg.left { animation: crossLegBack 0.18s ease-out; }
+.atk-crosscut .leg.left .lower { animation: crossLegBackLower 0.18s ease-out; }
+@keyframes crossLegFront {
+  0%   { transform: rotate(26deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  16%  { transform: rotate(20deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  50%  { transform: rotate(40deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  75%  { transform: rotate(32deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(26deg); }
+}
+@keyframes crossLegFrontLower {
+  0%   { transform: rotate(15deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  16%  { transform: rotate(25deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  50%  { transform: rotate(10deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  75%  { transform: rotate(13deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(15deg); }
+}
+@keyframes crossLegBack {
+  0%   { transform: rotate(-32deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  16%  { transform: rotate(-22deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  50%  { transform: rotate(-40deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  75%  { transform: rotate(-35deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-32deg); }
+}
+@keyframes crossLegBackLower {
+  0%   { transform: rotate(38deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  16%  { transform: rotate(45deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  50%  { transform: rotate(20deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  75%  { transform: rotate(26deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(38deg); }
+}
+.atk-crosscut .head { animation: crossHead 0.18s ease-out; }
+@keyframes crossHead {
+  0%   { transform: rotate(0deg);  animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  16%  { transform: rotate(2deg);  animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  50%  { transform: rotate(-7deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  75%  { transform: rotate(-2deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(0deg); }
+}
+/* Blade winds back, sweeps sideways across the body, rebounds */
 .atk-crosscut .arm.right { animation: crossArm 0.18s ease-out; }
 .atk-crosscut .sword { animation: crossSword 0.18s ease-out; }
 /* Off-hand rides along, matching the sword arm's sideways sweep */
 .atk-crosscut .arm.left { animation: bothHandsCross 0.18s ease-out; }
+@keyframes crossTorso {
+  0%   { transform: rotate(0deg);   animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  16%  { transform: rotate(6deg);   animation-timing-function: cubic-bezier(.55,0,.1,1); }  /* coil the opposite way */
+  50%  { transform: rotate(-11deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* impact: shoulders whip through */
+  75%  { transform: rotate(-4deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(0deg); }
+}
 @keyframes crossArm {
-  0%, 100% { transform: rotate(-20deg); }
-  50% { transform: rotate(55deg); }
+  0%   { transform: rotate(-20deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  16%  { transform: rotate(-38deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  50%  { transform: rotate(58deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  75%  { transform: rotate(20deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-20deg); }
 }
 @keyframes crossSword {
-  0%, 100% { transform: rotate(-150deg); }
-  50% { transform: rotate(-60deg); }
+  0%   { transform: rotate(-150deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  16%  { transform: rotate(-118deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  50%  { transform: rotate(-56deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  75%  { transform: rotate(-100deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-150deg); }
 }
 @keyframes bothHandsCross {
-  0%, 100% { transform: rotate(-16deg); }
-  50% { transform: rotate(59deg); }
+  0%   { transform: rotate(-16deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  16%  { transform: rotate(-34deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  50%  { transform: rotate(62deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  75%  { transform: rotate(24deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-16deg); }
 }
 
 /* -- ATTACK 3: SNAP KICK (both hands stay on the hilt, legs do the work) -- */
-.atk-kick .torso { transform: rotate(-15deg); }
-/* Support leg bends deep, bracing the weight */
-.atk-kick .leg.left { transform: rotate(-20deg); }
-.atk-kick .leg.left .lower { transform: rotate(65deg); }
+.atk-kick .torso { animation: kickTorso 0.2s cubic-bezier(0.1, 0.9, 0.2, 1); }
+/* Support leg loads, braces deep to carry the weight, then rebalances
+   as the kicking leg returns — instead of snapping straight to the
+   bent brace pose. */
+.atk-kick .leg.left { animation: kickLegSupport 0.2s cubic-bezier(0.1, 0.9, 0.2, 1); }
+.atk-kick .leg.left .lower { animation: kickLegSupportLower 0.2s cubic-bezier(0.1, 0.9, 0.2, 1); }
 /* Kicking leg fires outward */
 .atk-kick .leg.right { animation: snapKickUpper 0.2s cubic-bezier(0.1, 0.9, 0.2, 1); }
 .atk-kick .leg.right .lower { animation: snapKickLower 0.2s cubic-bezier(0.1, 0.9, 0.2, 1); }
+.atk-kick .head { animation: kickHead 0.2s cubic-bezier(0.1, 0.9, 0.2, 1); }
+@keyframes kickTorso {
+  0%   { transform: rotate(0deg);   animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  15%  { transform: rotate(5deg);   animation-timing-function: cubic-bezier(.55,0,.1,1); }  /* counter-lean as weight shifts to the support leg */
+  45%  { transform: rotate(-15deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* rotates into the kick */
+  70%  { transform: rotate(-8deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes kickLegSupport {
+  0%   { transform: rotate(-32deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  15%  { transform: rotate(-22deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  45%  { transform: rotate(-20deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  70%  { transform: rotate(-26deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-32deg); }
+}
+@keyframes kickLegSupportLower {
+  0%   { transform: rotate(38deg); animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  15%  { transform: rotate(50deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  45%  { transform: rotate(65deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  70%  { transform: rotate(58deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(38deg); }
+}
 @keyframes snapKickUpper {
   0%, 100% { transform: rotate(26deg); }
   45% { transform: rotate(-65deg); }
@@ -462,39 +607,157 @@ button:active:not(:disabled) { transform: translateY(2px); }
   25% { transform: rotate(70deg); }
   45% { transform: rotate(-5deg); }
 }
+@keyframes kickHead {
+  0%   { transform: rotate(0deg);  animation-timing-function: cubic-bezier(.45,0,.65,1); }
+  15%  { transform: rotate(3deg);  animation-timing-function: cubic-bezier(.55,0,.1,1); }
+  45%  { transform: rotate(-6deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  70%  { transform: rotate(-1deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(0deg); }
+}
 
-/* -- ATTACK 4: LUNGE OVERHEAD SLASH -- */
-.atk-slash .torso { transform: rotate(25deg); }
-/* Maximum low step push forward */
-.atk-slash .leg.right { transform: rotate(50deg); }
-.atk-slash .leg.right .lower { transform: rotate(22deg); }
-.atk-slash .leg.left { transform: rotate(-55deg); }
-.atk-slash .leg.left .lower { transform: rotate(10deg); }
-/* Weapon arc swing, both hands on the hilt */
+/* -- ATTACK 4: LUNGE OVERHEAD SLASH --
+   The old version raised the blade immediately with no wind-up and
+   recovered on one flat ease-out. This keeps the same raise-then-chop
+   shape and the same relative impact point (the chop landing) but adds
+   a short downward anticipation dip first (10%), then a real
+   follow-through overshoot (80%) after the chop lands before easing
+   back to guard, so the recovery reads as weight settling rather than
+   a straight glide back. Torso is keyframed to coil, open on the raise,
+   and drive forward through the chop. Duration/outer easing unchanged. */
+.atk-slash .torso { animation: slashTorso 0.18s ease-out; }
+/* Maximum low step push forward — legs dip with the anticipation,
+   load through the raise, plant hard when the chop lands, then
+   rebalance instead of snapping straight to the lunge pose. */
+.atk-slash .leg.right { animation: slashLegFront 0.18s ease-out; }
+.atk-slash .leg.right .lower { animation: slashLegFrontLower 0.18s ease-out; }
+.atk-slash .leg.left { animation: slashLegBack 0.18s ease-out; }
+.atk-slash .leg.left .lower { animation: slashLegBackLower 0.18s ease-out; }
+@keyframes slashLegFront {
+  0%   { transform: rotate(26deg); animation-timing-function: cubic-bezier(.5,0,.7,.4); }
+  10%  { transform: rotate(16deg); animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  32%  { transform: rotate(34deg); animation-timing-function: cubic-bezier(.7,0,.15,1); }
+  58%  { transform: rotate(50deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  80%  { transform: rotate(42deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(26deg); }
+}
+@keyframes slashLegFrontLower {
+  0%   { transform: rotate(15deg); animation-timing-function: cubic-bezier(.5,0,.7,.4); }
+  10%  { transform: rotate(24deg); animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  32%  { transform: rotate(20deg); animation-timing-function: cubic-bezier(.7,0,.15,1); }
+  58%  { transform: rotate(22deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  80%  { transform: rotate(18deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(15deg); }
+}
+@keyframes slashLegBack {
+  0%   { transform: rotate(-32deg); animation-timing-function: cubic-bezier(.5,0,.7,.4); }
+  10%  { transform: rotate(-24deg); animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  32%  { transform: rotate(-40deg); animation-timing-function: cubic-bezier(.7,0,.15,1); }
+  58%  { transform: rotate(-55deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  80%  { transform: rotate(-48deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-32deg); }
+}
+@keyframes slashLegBackLower {
+  0%   { transform: rotate(38deg); animation-timing-function: cubic-bezier(.5,0,.7,.4); }
+  10%  { transform: rotate(46deg); animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  32%  { transform: rotate(24deg); animation-timing-function: cubic-bezier(.7,0,.15,1); }
+  58%  { transform: rotate(10deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  80%  { transform: rotate(14deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(38deg); }
+}
+.atk-slash .head { animation: slashHead 0.18s ease-out; }
+@keyframes slashHead {
+  0%   { transform: rotate(0deg);  animation-timing-function: cubic-bezier(.5,0,.7,.4); }
+  10%  { transform: rotate(-2deg); animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  32%  { transform: rotate(-5deg); animation-timing-function: cubic-bezier(.7,0,.15,1); }
+  58%  { transform: rotate(8deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  80%  { transform: rotate(2deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(0deg); }
+}
+/* Weapon arc swing, both hands on the hilt: dip, raise, chop, rebound */
 .atk-slash .arm.right { animation: slashArmU 0.18s ease-out; }
 .atk-slash .sword { animation: slashSwordW 0.18s ease-out; }
 .atk-slash .arm.left { animation: bothHandsSlash 0.18s ease-out; }
-@keyframes slashArmU { 0%, 100% { transform: rotate(-20deg); } 35% { transform: rotate(-110deg); } }
-@keyframes slashSwordW { 0%, 100% { transform: rotate(-150deg); } 35% { transform: rotate(-70deg); } 65% { transform: rotate(-185deg); } }
-@keyframes bothHandsSlash { 0%, 100% { transform: rotate(-16deg); } 35% { transform: rotate(-106deg); } }
+@keyframes slashTorso {
+  0%   { transform: rotate(0deg);   animation-timing-function: cubic-bezier(.5,0,.7,.4); }
+  10%  { transform: rotate(-6deg);  animation-timing-function: cubic-bezier(.55,0,.15,1); } /* coils back before the overhead raise */
+  32%  { transform: rotate(-14deg); animation-timing-function: cubic-bezier(.7,0,.15,1); }  /* opens up as the blade lifts */
+  58%  { transform: rotate(28deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* drives forward through the chop */
+  80%  { transform: rotate(10deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes slashArmU {
+  0%   { transform: rotate(-20deg);  animation-timing-function: cubic-bezier(.5,0,.7,.4); }
+  10%  { transform: rotate(-6deg);   animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  32%  { transform: rotate(-120deg); animation-timing-function: cubic-bezier(.7,0,.15,1); }
+  58%  { transform: rotate(48deg);   animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  80%  { transform: rotate(12deg);   animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-20deg); }
+}
+@keyframes slashSwordW {
+  0%   { transform: rotate(-150deg); animation-timing-function: cubic-bezier(.5,0,.7,.4); }
+  10%  { transform: rotate(-134deg); animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  32%  { transform: rotate(-78deg);  animation-timing-function: cubic-bezier(.7,0,.15,1); }  /* raised overhead guard */
+  58%  { transform: rotate(-192deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* the chop lands */
+  80%  { transform: rotate(-162deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-150deg); }
+}
+@keyframes bothHandsSlash {
+  0%   { transform: rotate(-16deg);  animation-timing-function: cubic-bezier(.5,0,.7,.4); }
+  10%  { transform: rotate(-2deg);   animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  32%  { transform: rotate(-116deg); animation-timing-function: cubic-bezier(.7,0,.15,1); }
+  58%  { transform: rotate(52deg);   animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  80%  { transform: rotate(16deg);   animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-16deg); }
+}
 
 /* -- FOOTWORK: a quick forward step on every attack, echoing the
-   reference clip's constant closing-the-distance footwork -- */
+   reference clip's constant closing-the-distance footwork. Now carries
+   a small vertical load-and-plant (the hip/weight-shift a real lunge
+   step has) alongside the horizontal step, instead of a flat slide. -- */
 #attacker.lunge-step { animation: lungeStep 0.16s ease-out; }
 @keyframes lungeStep {
-  0%, 100% { transform: translateX(0); }
-  45% { transform: translateX(8px); }
+  0%   { transform: translateX(0) translateY(0) scaleY(1);       animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  20%  { transform: translateX(-1px) translateY(1.5px) scaleY(0.97); animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* weight sinks/loads before the step */
+  45%  { transform: translateX(8px) translateY(-1px) scaleY(1.02);  animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* drives forward, foot plants */
+  75%  { transform: translateX(4px) translateY(0) scaleY(1); }
+  100% { transform: translateX(0) translateY(0) scaleY(1); }
 }
 
 /* -- HIT REACTION (either fighter — Normal Mode only ever hits the
-   defender, but AI Mode needs the attacker to take hits back too) -- */
+   defender, but AI Mode needs the attacker to take hits back too).
+   The whole-body flinch now has a settle beat instead of snapping
+   straight back to neutral, and the torso/head/back leg react as
+   their own layered secondary motion so the recoil reads through the
+   whole body, not just a single translateX/rotate on the root. -- */
 .stickman { --kb: 16px; }
 .stickman.state-hit { animation: rapidFlinch 0.2s ease-out; }
 .stickman.state-hit div { border-color: var(--bad); background-color: var(--bad); }
+.state-hit .torso { animation: hitTorsoRecoil 0.2s ease-out; }
+.state-hit .head { animation: hitHeadSnap 0.2s ease-out; }
+.state-hit .leg.left { animation: hitLegGive 0.2s ease-out; }
 @keyframes rapidFlinch {
-  0% { transform: translateX(0) rotate(0deg); }
-  30% { transform: translateX(var(--kb)) rotate(8deg); }
+  0%   { transform: translateX(0) rotate(0deg);                              animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  30%  { transform: translateX(var(--kb)) rotate(8deg);                      animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  62%  { transform: translateX(calc(var(--kb) * 0.35)) rotate(3deg);         animation-timing-function: cubic-bezier(.33,0,.2,1); }
   100% { transform: translateX(0) rotate(0deg); }
+}
+@keyframes hitTorsoRecoil {
+  0%   { transform: rotate(0deg);   animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  30%  { transform: rotate(-16deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* hunches away from the hit */
+  65%  { transform: rotate(-5deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes hitHeadSnap {
+  0%   { transform: rotate(0deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  30%  { transform: rotate(14deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* snaps back on impact */
+  65%  { transform: rotate(4deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes hitLegGive {
+  0%   { transform: rotate(-32deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
+  30%  { transform: rotate(-42deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* knee gives under the impact */
+  65%  { transform: rotate(-36deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  100% { transform: rotate(-32deg); }
 }
 
 /* -- ERRORS & STUMBLES -- */
@@ -527,6 +790,27 @@ button:active:not(:disabled) { transform: translateY(2px); }
     0% { opacity: 0; transform: scale(0.2); }
     25% { opacity: 1; transform: scale(1.1); }
     100% { opacity: 0; transform: scale(1.5); }
+}
+
+/* -- IMPACT FLASH: pulsed exactly on the strike frame, same moment as
+   the spark/knockback/hit pause. Purely new (didn't exist before) but
+   is timing infrastructure, not a redesign of any existing animation. -- */
+.hit-flash { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: rgba(244, 246, 251, 0.35); }
+.hit-flash-show { animation: hitFlashPop 0.12s ease-out; }
+@keyframes hitFlashPop {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* -- HIT PAUSE: freezes every already-running combat animation for a
+   beat on the impact frame. This only pauses/resumes playback via
+   animation-play-state -- it does not change what any animation looks
+   like, so it's timing, not a redesign. -- */
+.hit-stop .stickman,
+.hit-stop .stickman *,
+.hit-stop .spark-vfx {
+  animation-play-state: paused !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
