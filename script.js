@@ -328,7 +328,21 @@ const ATTACK_DURATIONS = { 'atk-thrust': 160, 'atk-crosscut': 180, 'atk-kick': 2
 // snapKickUpper/slashArmU). Every impact-synced effect below fires off
 // of this, never at swing-start, so nothing lands before visual contact.
 const ATTACK_IMPACT_AT = { 'atk-thrust': 0.46, 'atk-crosscut': 0.50, 'atk-kick': 0.45, 'atk-slash': 0.58 };
-const HITSTOP_MS = 55; // brief freeze held on the impact frame -- timing only, no animation is altered
+// Hit-stop length per attack type, in ms -- 2-6 frames at 60fps (33-100ms).
+// Scaled to each attack's weight: the fast thrust stays snappy so
+// combo flow never feels sluggish, while the heavier overhead slash
+// gets a slightly longer beat to sell its impact.
+const HITSTOP_MS = { 'atk-thrust': 40, 'atk-crosscut': 50, 'atk-kick': 55, 'atk-slash': 65 };
+// Camera shake per attack type: `x` is the horizontal shake distance in
+// px (also doubles as the punch-in strength via --shake-mag below),
+// `mag` scales the punch/vertical jitter. Light, fast attacks (thrust)
+// stay subtle; heavier attacks (slash) hit the camera harder.
+const CAMERA_SHAKE = {
+  'atk-thrust':   { x: 3, mag: 1   },
+  'atk-crosscut': { x: 4, mag: 1.2 },
+  'atk-kick':     { x: 5, mag: 1.4 },
+  'atk-slash':    { x: 6, mag: 1.7 },
+};
  
 /* ---------------------------------------------------------
    COMBAT ENGINE
@@ -376,6 +390,21 @@ function clearAllCombatTimers(){
   clearTimeout(hitStopTimeoutId);
   clearTimeout(missTimeoutId);
   el.duelContainer.classList.remove('hit-stop');
+  el.duelContainer.classList.remove('camera-hit');
+}
+
+// Camera shake + punch, directional (toward whichever fighter took the
+// hit) and scaled by attack weight. Writes the direction/magnitude into
+// CSS custom properties, then pulse() restarts the single camera-hit
+// animation from scratch -- so a new hit always cleanly replaces the
+// last shake instead of stacking a second animation instance on top of
+// one still playing, which is what would turn rapid combo hits into
+// chaotic, compounding jitter.
+function triggerCameraHit(type, direction){
+  const shake = CAMERA_SHAKE[type];
+  el.duelContainer.style.setProperty('--shake-x', (direction * shake.x) + 'px');
+  el.duelContainer.style.setProperty('--shake-mag', shake.mag);
+  pulse(el.duelContainer, 'camera-hit');
 }
 
 // Starts a swing immediately -- same classes, same CSS animation, same
@@ -402,7 +431,23 @@ function scheduleSwing(actorKey, actorEl, type, footwork, onImpact){
     positionSpark();
     pulse(el.spark, 'spark-show');
     pulse(el.hitFlash, 'hit-flash-show');
-    triggerHitPause(HITSTOP_MS);
+
+    const freeze = HITSTOP_MS[type];
+    triggerHitPause(freeze);
+    // Direction: the player's own attacks land to the right (toward the
+    // defender), the opponent's (bot/remote) land to the left (toward
+    // the attacker) -- so the shake always kicks toward whoever got hit.
+    triggerCameraHit(type, actorKey === 'attacker' ? 1 : -1);
+    // The pause above freezes this actor's swing animation for `freeze`
+    // ms. The strip timer below was already counting down on real time,
+    // so without this it would fire early relative to the now-paused
+    // animation and cut the follow-through off mid-motion. Reschedule
+    // it from right now for whatever time was left, plus the freeze.
+    clearTimeout(timers.strip);
+    timers.strip = setTimeout(() => {
+      actorEl.classList.remove(type);
+    }, (duration - impactDelay) + freeze);
+
     onImpact();
   }, impactDelay);
 

@@ -224,6 +224,24 @@ button:active:not(:disabled) { transform: translateY(2px); }
 #duelContainer {
   background: color-mix(in srgb, var(--card) 60%, var(--bg));
   border-radius: 8px;
+  --shake-x: 0px;
+  --shake-mag: 1;
+}
+
+/* -- CAMERA FEEDBACK: directional shake + a small punch-in on impact,
+   both in one keyframe so only one animation instance ever runs on
+   this element -- a new hit (via pulse()) cleanly restarts it rather
+   than layering a second shake on top, which is what keeps rapid
+   combo hits from compounding into chaos. Oscillation amplitude decays
+   toward 0 for a smooth recovery back to rest. -- */
+.camera-hit { animation: cameraShake 220ms cubic-bezier(.36,.07,.19,.97); }
+@keyframes cameraShake {
+  0%   { transform: translate(0, 0) scale(1); }
+  8%   { transform: translate(var(--shake-x), calc(var(--shake-mag) * -2px)) scale(calc(1 + var(--shake-mag) * 0.012)); } /* punch */
+  22%  { transform: translate(calc(var(--shake-x) * -0.55), calc(var(--shake-mag) * 1.5px)) scale(1); }
+  40%  { transform: translate(calc(var(--shake-x) * 0.3), calc(var(--shake-mag) * -1px)) scale(1); }
+  60%  { transform: translate(calc(var(--shake-x) * -0.12), 0) scale(1); }
+  100% { transform: translate(0, 0) scale(1); }
 }
 
 /* Defender's whole rig is wrapped and mirrored so the sword, arms, and
@@ -391,6 +409,45 @@ button:active:not(:disabled) { transform: translateY(2px); }
   background: #555; top: 5px; left: -5px;
 }
 
+/* -- SLASH TRAIL --
+   Four afterimages of the blade, each picking up the exact same swing
+   animation (thrustSword/crossSword/slashSwordW) a few milliseconds
+   later than the live blade. Because the underlying motion is a
+   rotation, the resulting trail naturally curves along the same arc
+   the sword travels -- it isn't a straight streak.
+   Each stage tapers the blade shorter/thinner and fades it dimmer and
+   blurrier than the last, so the trail dissolves smoothly instead of
+   reading as four hard copies. A mask additionally fades out the hilt
+   end of every ghost (where all the copies nearly overlap and motion
+   is slowest) while keeping the tip end -- the fastest, widest-arcing
+   part of the swing -- crisper, which is what actually sells the
+   motion illusion. */
+.sword-ghost {
+  opacity: 0;
+  box-shadow: none;
+  pointer-events: none;
+  mask-image: linear-gradient(to top, transparent, rgba(0,0,0,0.9) 55%);
+  -webkit-mask-image: linear-gradient(to top, transparent, rgba(0,0,0,0.9) 55%);
+}
+.sword-ghost::after { display: none; } /* one crossguard is enough -- don't stack four */
+
+.atk-thrust .sword.sword-ghost-1,
+.atk-crosscut .sword.sword-ghost-1,
+.atk-slash .sword.sword-ghost-1 { animation-delay: 16ms; opacity: 0.42; height: 54px; width: 2.6px !important; filter: blur(0.4px); }
+
+.atk-thrust .sword.sword-ghost-2,
+.atk-crosscut .sword.sword-ghost-2,
+.atk-slash .sword.sword-ghost-2 { animation-delay: 32ms; opacity: 0.26; height: 47px; width: 2.1px !important; filter: blur(0.9px); }
+
+.atk-thrust .sword.sword-ghost-3,
+.atk-crosscut .sword.sword-ghost-3,
+.atk-slash .sword.sword-ghost-3 { animation-delay: 48ms; opacity: 0.13; height: 39px; width: 1.6px !important; filter: blur(1.4px); }
+
+.atk-thrust .sword.sword-ghost-4,
+.atk-crosscut .sword.sword-ghost-4,
+.atk-slash .sword.sword-ghost-4 { animation-delay: 64ms; opacity: 0.05; height: 30px; width: 1.1px !important; filter: blur(1.9px); }
+
+
 /* ---------------------------------------------------------
    INSTANT combat frames (Leg animations trigger ONLY here)
 --------------------------------------------------------- */
@@ -417,6 +474,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   18%  { transform: rotate(18deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }  /* loads */
   46%  { transform: rotate(48deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* plants into the lunge */
   72%  { transform: rotate(40deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* rebalances */
+  88%  { transform: rotate(23deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* small rebalance wobble */
   100% { transform: rotate(26deg); }
 }
 @keyframes thrustLegFrontLower {
@@ -431,6 +489,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   18%  { transform: rotate(-24deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
   46%  { transform: rotate(-50deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
   72%  { transform: rotate(-44deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  88%  { transform: rotate(-29deg); animation-timing-function: cubic-bezier(.33,0,.2,1); } /* small rebalance wobble */
   100% { transform: rotate(-32deg); }
 }
 @keyframes thrustLegBackLower {
@@ -449,6 +508,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   18%  { transform: rotate(-2deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }  /* lags on the wind-up */
   46%  { transform: rotate(6deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* whips through with the strike */
   72%  { transform: rotate(1deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  88%  { transform: rotate(-0.4deg); animation-timing-function: cubic-bezier(.33,0,.2,1); } /* settles with the rest of the body */
   100% { transform: rotate(0deg); }
 }
 /* Blade winds back, whips out, rebounds */
@@ -461,6 +521,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   18%  { transform: rotate(-4deg);  animation-timing-function: cubic-bezier(.55,0,.1,1); }  /* anticipation: coil back */
   46%  { transform: rotate(13deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }  /* impact: drives into the thrust */
   72%  { transform: rotate(4deg);   animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* rebound */
+  88%  { transform: rotate(-1deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* small settle wobble, crosses rest briefly */
   100% { transform: rotate(0deg); }
 }
 @keyframes thrustArm {
@@ -468,6 +529,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   18%  { transform: rotate(-9deg);  animation-timing-function: cubic-bezier(.55,0,.1,1); }
   46%  { transform: rotate(-60deg); animation-timing-function: cubic-bezier(.16,1,.3,1); } /* straightens toward the target */
   72%  { transform: rotate(-27deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  88%  { transform: rotate(-18deg); animation-timing-function: cubic-bezier(.33,0,.2,1); } /* settle wobble */
   100% { transform: rotate(-20deg); }
 }
 @keyframes thrustSword {
@@ -475,6 +537,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   18%  { transform: rotate(-156deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
   46%  { transform: rotate(-136deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
   72%  { transform: rotate(-152deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  88%  { transform: rotate(-149deg); animation-timing-function: cubic-bezier(.33,0,.2,1); } /* settle wobble */
   100% { transform: rotate(-150deg); }
 }
 @keyframes bothHandsThrust {
@@ -482,6 +545,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   18%  { transform: rotate(-5deg);  animation-timing-function: cubic-bezier(.55,0,.1,1); }
   46%  { transform: rotate(-56deg); animation-timing-function: cubic-bezier(.16,1,.3,1); }
   72%  { transform: rotate(-23deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  88%  { transform: rotate(-14deg); animation-timing-function: cubic-bezier(.33,0,.2,1); } /* settle wobble */
   100% { transform: rotate(-16deg); }
 }
 
@@ -549,6 +613,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   16%  { transform: rotate(-38deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
   50%  { transform: rotate(58deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }
   75%  { transform: rotate(20deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  88%  { transform: rotate(-14deg); animation-timing-function: cubic-bezier(.33,0,.2,1); } /* closes most of the gap before the final settle */
   100% { transform: rotate(-20deg); }
 }
 @keyframes crossSword {
@@ -556,6 +621,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   16%  { transform: rotate(-118deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
   50%  { transform: rotate(-56deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }
   75%  { transform: rotate(-100deg); animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  88%  { transform: rotate(-145deg); animation-timing-function: cubic-bezier(.33,0,.2,1); } /* closes most of the gap before the final settle */
   100% { transform: rotate(-150deg); }
 }
 @keyframes bothHandsCross {
@@ -563,6 +629,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   16%  { transform: rotate(-34deg); animation-timing-function: cubic-bezier(.55,0,.1,1); }
   50%  { transform: rotate(62deg);  animation-timing-function: cubic-bezier(.16,1,.3,1); }
   75%  { transform: rotate(24deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  88%  { transform: rotate(-11deg); animation-timing-function: cubic-bezier(.33,0,.2,1); } /* closes most of the gap before the final settle */
   100% { transform: rotate(-16deg); }
 }
 
@@ -691,6 +758,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   32%  { transform: rotate(-120deg); animation-timing-function: cubic-bezier(.7,0,.15,1); }
   58%  { transform: rotate(48deg);   animation-timing-function: cubic-bezier(.16,1,.3,1); }
   80%  { transform: rotate(12deg);   animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  92%  { transform: rotate(-14deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); } /* closes most of the gap before the final settle */
   100% { transform: rotate(-20deg); }
 }
 @keyframes slashSwordW {
@@ -707,6 +775,7 @@ button:active:not(:disabled) { transform: translateY(2px); }
   32%  { transform: rotate(-116deg); animation-timing-function: cubic-bezier(.7,0,.15,1); }
   58%  { transform: rotate(52deg);   animation-timing-function: cubic-bezier(.16,1,.3,1); }
   80%  { transform: rotate(16deg);   animation-timing-function: cubic-bezier(.33,0,.2,1); }
+  92%  { transform: rotate(-11deg);  animation-timing-function: cubic-bezier(.33,0,.2,1); } /* closes most of the gap before the final settle */
   100% { transform: rotate(-16deg); }
 }
 
@@ -721,6 +790,29 @@ button:active:not(:disabled) { transform: translateY(2px); }
   45%  { transform: translateX(8px) translateY(-1px) scaleY(1.02);  animation-timing-function: cubic-bezier(.33,0,.2,1); }  /* drives forward, foot plants */
   75%  { transform: translateX(4px) translateY(0) scaleY(1); }
   100% { transform: translateX(0) translateY(0) scaleY(1); }
+}
+
+/* -- GROUND DUST: a small, subtle puff at the front foot, timed to
+   land exactly on the foot-plant moment already in lungeStep (45% of
+   0.16s = ~72ms). Pure pseudo-element -- no new DOM nodes, no JS, and
+   it only ever runs once per step alongside the footwork it belongs
+   to, so it stays lightweight. -- */
+#attacker.lunge-step::after {
+  content: '';
+  position: absolute;
+  left: 2px; bottom: -1px;
+  width: 9px; height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--s-color) 55%, transparent), transparent 75%);
+  opacity: 0;
+  pointer-events: none;
+  animation: dustPuff 0.22s ease-out;
+  animation-delay: 72ms;
+}
+@keyframes dustPuff {
+  0%   { opacity: 0;   transform: scale(0.5) translateY(0); }
+  35%  { opacity: 0.55; transform: scale(1) translateY(-0.5px); }
+  100% { opacity: 0;   transform: scale(1.4) translateY(-2px); }
 }
 
 /* -- HIT REACTION (either fighter — Normal Mode only ever hits the
@@ -780,26 +872,59 @@ button:active:not(:disabled) { transform: translateY(2px); }
 
 /* VFX Spark system */
 .spark-vfx { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.spark-vfx .line { position: absolute; width: 16px; height: 2px; background: var(--brass); border-radius: 2px; transform-origin: 0% 50%; }
-.spark-vfx .line:nth-child(1) { transform: rotate(45deg); }
-.spark-vfx .line:nth-child(2) { transform: rotate(135deg); }
-.spark-vfx .line:nth-child(3) { transform: rotate(225deg); }
-.spark-vfx .line:nth-child(4) { transform: rotate(315deg); }
-.spark-show { animation: sparkPop 0.2s ease-out; }
+/* Bright core flash at the point of contact -- part of the spark, not a separate effect */
+.spark-vfx::before {
+  content: '';
+  position: absolute; left: 50%; top: 50%;
+  width: 12px; height: 12px; margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, var(--brass) 45%, rgba(240,184,60,0) 75%);
+  opacity: 0;
+}
+.spark-vfx .line { position: absolute; width: 20px; height: 2px; background: var(--brass); border-radius: 2px; transform-origin: 0% 50%; transform: rotate(var(--ang)); opacity: 0; }
+.spark-vfx .line:nth-child(1) { --ang: 45deg; }
+.spark-vfx .line:nth-child(2) { --ang: 135deg; }
+.spark-vfx .line:nth-child(3) { --ang: 225deg; }
+.spark-vfx .line:nth-child(4) { --ang: 315deg; }
+
+.spark-show { animation: sparkPop 0.26s cubic-bezier(.16,1,.3,1); }
+.spark-show::before { animation: sparkCoreFlash 0.16s ease-out; }
+.spark-show .line { animation: sparkLineFire 0.28s cubic-bezier(.16,1,.3,1); }
+/* small per-line stagger so the four blade-lines don't fire as one flat
+   symmetric flash -- reads as energy kicking outward instead */
+.spark-show .line:nth-child(2) { animation-delay: 12ms; }
+.spark-show .line:nth-child(3) { animation-delay: 6ms; }
+.spark-show .line:nth-child(4) { animation-delay: 18ms; }
 @keyframes sparkPop {
-    0% { opacity: 0; transform: scale(0.2); }
-    25% { opacity: 1; transform: scale(1.1); }
-    100% { opacity: 0; transform: scale(1.5); }
+    0%   { opacity: 0;    transform: scale(0.2); }
+    16%  { opacity: 1;    transform: scale(1.3); }   /* bigger, punchier burst */
+    45%  { opacity: 0.85; transform: scale(1.15); }
+    100% { opacity: 0;    transform: scale(1.9); }    /* keeps expanding as it dissolves, instead of shrinking-then-vanishing */
+}
+@keyframes sparkCoreFlash {
+    0%   { opacity: 0;   transform: scale(0.15); }
+    22%  { opacity: 1;   transform: scale(1); }
+    100% { opacity: 0;   transform: scale(0.5); }
+}
+@keyframes sparkLineFire {
+    0%   { opacity: 0;    transform: rotate(var(--ang)) scaleX(0.3) translateX(0); }
+    18%  { opacity: 1;    transform: rotate(var(--ang)) scaleX(1.3) translateX(2px); }  /* fires outward past its own length -- directional energy */
+    50%  { opacity: 0.75; transform: rotate(var(--ang)) scaleX(1.1) translateX(4px); }
+    100% { opacity: 0;    transform: rotate(var(--ang)) scaleX(0.9) translateX(8px); }
 }
 
 /* -- IMPACT FLASH: pulsed exactly on the strike frame, same moment as
-   the spark/knockback/hit pause. Purely new (didn't exist before) but
-   is timing infrastructure, not a redesign of any existing animation. -- */
-.hit-flash { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: rgba(244, 246, 251, 0.35); }
-.hit-flash-show { animation: hitFlashPop 0.12s ease-out; }
+   the spark/knockback/hit pause. -- */
+.hit-flash {
+  position: absolute; inset: 0; opacity: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% 62%, rgba(255,255,255,0.9) 0%, rgba(240,184,60,0.45) 35%, rgba(240,184,60,0) 72%);
+  mix-blend-mode: screen;
+}
+.hit-flash-show { animation: hitFlashPop 0.16s cubic-bezier(.16,1,.3,1); }
 @keyframes hitFlashPop {
-  0% { opacity: 0; }
-  30% { opacity: 1; }
+  0%   { opacity: 0; }
+  12%  { opacity: 1; }     /* near-instant rise -- reads as a struck light, not a fade-in */
+  30%  { opacity: 0.65; }  /* brief hold at near-peak before it decays */
   100% { opacity: 0; }
 }
 
