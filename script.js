@@ -57,12 +57,12 @@ let pvpP1Stats = null;
    expose client-side by design (it's rate-limited and has no admin
    rights) -- it is NOT a secret key.
 --------------------------------------------------------- */
-const SUPABASE_URL = 'https://gcnjsbswxppvlnmiyard.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_ylVFkg2bynXFQ-MMJwCIng_bV14fZsv';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 let supabaseClient = null;
 try {
-  if (window.supabase && SUPABASE_URL.startsWith('http')){
+  if (window.supabase && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY){
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
 } catch (err){
@@ -82,6 +82,7 @@ let state = {
   timerId: null,
   started: false,
   finished: false,
+  startTimestamp: null, // precise wall-clock reference for WPM, set the moment typing begins
   currentText: "",
   typedChars: [], 
   totalTyped: 0,
@@ -353,8 +354,8 @@ const CAMERA_SHAKE = {
 // means the player's swing timers and the opponent's never race or
 // clobber each other.
 const combatTimers = {
-  attacker: { strip: null, impact: null },
-  defender: { strip: null, impact: null },
+  attacker: { strip: null, impact: null, blend: null },
+  defender: { strip: null, impact: null, blend: null },
 };
 
 function pulse(elm, cls){
@@ -386,11 +387,16 @@ function triggerHitPause(ms){
 }
 
 function clearAllCombatTimers(){
-  Object.values(combatTimers).forEach(t => { clearTimeout(t.strip); clearTimeout(t.impact); });
+  Object.values(combatTimers).forEach(t => {
+    clearTimeout(t.strip); clearTimeout(t.impact); clearTimeout(t.blend);
+  });
   clearTimeout(hitStopTimeoutId);
   clearTimeout(missTimeoutId);
   el.duelContainer.classList.remove('hit-stop');
   el.duelContainer.classList.remove('camera-hit');
+  [el.attacker, el.defender].forEach(actorEl => {
+    actorEl.querySelectorAll(BLEND_PARTS).forEach(p => { p.style.transform = ''; });
+  });
 }
 
 // Camera shake + punch, directional (toward whichever fighter took the
@@ -407,6 +413,25 @@ function triggerCameraHit(type, direction){
   pulse(el.duelContainer, 'camera-hit');
 }
 
+// -- COMBO TRANSITION BLENDING --
+// Hard-removing an in-flight attack class snaps every limb straight to
+// its new animation's 0% pose in a single frame -- only visible when a
+// new attack interrupts one still mid-swing (chaining faster than a
+// swing's own recovery). This freezes the swinging limbs at their
+// actual current (computed) pose for one short beat via inline style,
+// giving the existing `.stickman div { transition: transform 120ms }`
+// rule a real "before" value to bridge from before the new swing's
+// animation takes over, instead of cutting straight to it. A normal,
+// non-overlapping attack never touches this path and stays instant.
+const BLEND_PARTS = '.torso, .head, .arm, .sword:not(.sword-ghost), .leg, .leg .lower';
+const BLEND_MS = 28; // short enough to stay imperceptible as input lag, long enough for the transition to visibly soften the cut
+
+function beginSwing(actorEl, type, footwork){
+  actorEl.classList.remove(...ATTACK_TYPES);
+  pulse(actorEl, type);
+  if (footwork) pulse(actorEl, 'lunge-step');
+}
+
 // Starts a swing immediately -- same classes, same CSS animation, same
 // duration as before -- but schedules every impact-synced effect
 // (spark, hit flash, hit pause, and whatever onImpact adds: recoil/
@@ -417,14 +442,30 @@ function triggerCameraHit(type, direction){
 // scheduling logic three times.
 function scheduleSwing(actorKey, actorEl, type, footwork, onImpact){
   const timers = combatTimers[actorKey];
-
   clearTimeout(timers.strip);
-  actorEl.classList.remove(...ATTACK_TYPES);
-  pulse(actorEl, type);
-  if (footwork) pulse(actorEl, 'lunge-step');
+  clearTimeout(timers.blend);
+
+  const wasSwinging = ATTACK_TYPES.some(t => actorEl.classList.contains(t));
+  let startDelay = 0;
+
+  if (wasSwinging){
+    // Read each limb's current animated pose *before* touching any
+    // classes, then hold it in place with an inline style so removing
+    // the old attack class doesn't cause a visible jump.
+    const parts = actorEl.querySelectorAll(BLEND_PARTS);
+    parts.forEach(p => { p.style.transform = getComputedStyle(p).transform; });
+    actorEl.classList.remove(...ATTACK_TYPES);
+    startDelay = BLEND_MS;
+    timers.blend = setTimeout(() => {
+      parts.forEach(p => { p.style.transform = ''; });
+      beginSwing(actorEl, type, footwork);
+    }, startDelay);
+  } else {
+    beginSwing(actorEl, type, footwork);
+  }
 
   const duration = ATTACK_DURATIONS[type];
-  const impactDelay = Math.round(duration * ATTACK_IMPACT_AT[type]);
+  const impactDelay = Math.round(duration * ATTACK_IMPACT_AT[type]) + startDelay;
 
   clearTimeout(timers.impact);
   timers.impact = setTimeout(() => {
@@ -446,14 +487,14 @@ function scheduleSwing(actorKey, actorEl, type, footwork, onImpact){
     clearTimeout(timers.strip);
     timers.strip = setTimeout(() => {
       actorEl.classList.remove(type);
-    }, (duration - impactDelay) + freeze);
+    }, (duration - impactDelay + startDelay) + freeze);
 
     onImpact();
   }, impactDelay);
 
   timers.strip = setTimeout(() => {
     actorEl.classList.remove(type);
-  }, duration);
+  }, duration + startDelay);
 }
 
 function triggerAttack(){
@@ -679,6 +720,7 @@ function updateCurrentCharMarker(){
  
 function startTimer(){
   state.started = true;
+  state.startTimestamp = performance.now();
   state.timerId = setInterval(() => {
     state.timeLeft -= 1;
     el.timerDisplay.textContent = state.timeLeft;
@@ -688,19 +730,27 @@ function startTimer(){
     }
   }, 1000);
 }
- 
-function computeElapsedMinutes(){
-  const elapsedSeconds = state.selectedTime - state.timeLeft;
-  return Math.max(elapsedSeconds, 1) / 60; 
+
+// Single source of truth for player WPM (used by both the live display
+// and the final result), so the two can never drift out of sync with
+// each other. Elapsed time is measured from a precise timestamp -- not
+// the once-per-second countdown display -- and, below 1 real second of
+// data, there simply isn't enough signal for a per-minute extrapolation
+// to be meaningful, so it reports 0 instead of projecting a noisy guess.
+function calculatePlayerWpm(){
+  if (state.startTimestamp == null) return 0;
+  const elapsedSeconds = (performance.now() - state.startTimestamp) / 1000;
+  if (elapsedSeconds < 1) return 0;
+  const wpm = Math.round((state.totalCorrect / 5) / (elapsedSeconds / 60));
+  return isFinite(wpm) && wpm > 0 ? wpm : 0;
 }
  
 function updateLiveStats(){
-  const minutes = computeElapsedMinutes();
-  const wpm = Math.round((state.totalTyped / 5) / minutes);
+  const wpm = calculatePlayerWpm();
   const acc = state.totalTyped > 0
     ? Math.round((state.totalCorrect / state.totalTyped) * 100)
     : 100;
-  el.liveWpm.textContent = isFinite(wpm) && wpm > 0 ? wpm : 0;
+  el.liveWpm.textContent = wpm;
   el.liveAcc.textContent = acc;
 }
  
@@ -965,12 +1015,10 @@ function finishTest(){
   el.attacker.classList.add('pose-clash');
   el.defender.classList.add('pose-clash');
  
-  const minutes = computeElapsedMinutes();
-  const finalWpm = Math.round((state.totalTyped / 5) / minutes);
+  const roundedWpm = calculatePlayerWpm();
   const finalAcc = state.totalTyped > 0
     ? Math.round((state.totalCorrect / state.totalTyped) * 100)
     : 100;
-  const roundedWpm = isFinite(finalWpm) && finalWpm > 0 ? finalWpm : 0;
 
   if (currentMode === 'normal'){
     el.finalWpm.textContent = roundedWpm;
@@ -1052,6 +1100,7 @@ async function resetTest(forcedText){
     started: false,
     finished: false,
     koPending: false,
+    startTimestamp: null,
     currentText: "", // loads in below; empty string safely no-ops any keystroke until then
     typedChars: [],
     totalTyped: 0,
