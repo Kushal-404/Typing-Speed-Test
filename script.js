@@ -2,8 +2,8 @@
    AUDIO
 --------------------------------------------------------- */
 // Referencing the exact file from an external folder as requested
-const mistypeSound = new Audio('../sounds/Bruh.mp3');
-
+const mistypeSound = new Audio('/sounds/Bruh.mp3');
+mistypeSound.preload = 'auto';
 /* ---------------------------------------------------------
    DATA
 --------------------------------------------------------- */
