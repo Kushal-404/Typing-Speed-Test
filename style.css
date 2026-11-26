@@ -960,3 +960,149 @@ button:active:not(:disabled) { transform: translateY(2px); }
 @media (prefers-reduced-motion: reduce) {
   .carriage, .stickman, .stickman div, .spark-vfx { transition: none !important; animation: none !important; }
 }
+
+/* ---------------------------------------------------------
+   ARENA BACKDROP
+   Three pure-CSS layers stacked behind the fighters.
+   All are pointer-events:none and sit below stageWrapper's
+   z-index so they never interfere with JS positioning.
+
+   Layer 1 (::before on #duelContainer)
+     — dithered GBA-style sky: a stepped two-colour gradient
+       with a 2×2 checkerboard noise pattern at 4 % opacity
+       to fake GBA's dithered colour bands.
+
+   Layer 2 (::after on #duelContainer)
+     — pixel silhouette horizon: an inline SVG drawn as a
+       background-image, two stepped mountain ridgelines in
+       muted indigo so they read clearly against the sky
+       without competing with the fighters.
+
+   Layer 3 (::before on #stageWrapper)
+     — floor tiles: a repeating brick/tile grid that moves
+       with the stage when JS pans the stageWrapper, so the
+       ground feels "connected" to the fighters' footwork.
+       Tile lines are very faint (< 20 % opacity) to stay
+       subordinate to the action.
+--------------------------------------------------------- */
+
+/* -- Layer 1: Dithered sky -- */
+#duelContainer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+
+  /* Base sky gradient: GBA navy top → muted indigo-blue lower third */
+  background:
+    /* ── MOON: three layers, top-right of the arena ──────────────────────
+       1. Soft outer glow halo (large, very faint warm circle)
+       2. Crescent shadow — a dark circle offset left+down from moon centre,
+          carving a GBA-style hard-edged crescent into the disc
+       3. Moon body — crisp ivory/cream circle                              */
+    radial-gradient(circle, rgba(240,228,170,0.13) 0%, transparent 55%)
+      82% 11% / 52px 52px no-repeat,
+    radial-gradient(circle, #091221 0%, #091221 58%, transparent 59%)
+      84.5% 14% / 22px 22px no-repeat,
+    radial-gradient(circle, #f5efd4 0%, #ddd5aa 52%, transparent 55%)
+      82% 11% / 26px 26px no-repeat,
+    /* 2×2 checkerboard dither at ~4% over the gradient — fakes GBA banding */
+    repeating-linear-gradient(
+      45deg,
+      rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 2px,
+      transparent                2px, transparent                4px
+    ),
+    /* Core sky ramp — three bands like GBA's limited palette */
+    linear-gradient(
+      to bottom,
+      #0a1428 0%,
+      #0d1e3a 38%,
+      #152b4e 68%,
+      #1a3358 100%
+    );
+}
+
+/* -- Layer 2: Pixel mountain silhouettes (inline SVG background-image) --
+   Two ridgelines: a far, lighter range and a nearer, darker one.
+   The SVG uses only right-angle (pixel-art) steps — no curves. */
+#duelContainer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 220' preserveAspectRatio='none'%3E%3C!-- Far ridge (lighter, higher) --%3E%3Cpolygon points='0,220 0,110 16,110 16,98 32,98 32,86 48,86 48,74 64,74 64,86 80,86 80,78 96,78 96,66 112,66 112,78 128,78 128,70 144,70 144,82 160,82 160,70 176,70 176,58 192,58 192,70 208,70 208,80 224,80 224,68 240,68 240,78 256,78 256,88 272,88 272,76 288,76 288,88 304,88 304,100 320,100 320,220' fill='%23162040' /%3E%3C!-- Near ridge (darker, lower, more jagged) --%3E%3Cpolygon points='0,220 0,148 20,148 20,136 40,136 40,124 56,124 56,136 72,136 72,148 88,148 88,138 104,138 104,126 120,126 120,138 136,138 136,150 152,150 152,138 168,138 168,126 184,126 184,138 200,138 200,150 216,150 216,140 232,140 232,152 248,152 248,140 264,140 264,152 280,152 280,142 300,142 300,152 320,152 320,220' fill='%230f1a30' /%3E%3C!-- Ground fill below ridgeline to bottom --%3E%3Crect x='0' y='190' width='320' height='30' fill='%230c1726' /%3E%3C/svg%3E");
+  background-size: 100% 100%;
+}
+
+/* -- Layer 3: Floor tile grid (moves with stageWrapper pan) --
+   Sits at the bottom of stageWrapper so it pans in sync with
+   the fighters, reinforcing parallax. Very faint tile lines. */
+#stageWrapper::before {
+  content: '';
+  position: absolute;
+  /* extend wider than the viewport so panning never reveals an edge */
+  left: -100%;
+  right: -100%;
+  /* sits in the bottom 18 % of the arena height — the "ground plane" */
+  bottom: 0;
+  height: 20%;
+  z-index: 0;
+  pointer-events: none;
+
+  /* Horizontal tile lines (every 24 px) + subtle vertical ones (every 32 px),
+     all at ≈15% opacity — visible enough to read as a tiled floor but not
+     so strong they pull focus from the fighters */
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0px, transparent 31px,
+      rgba(255,255,255,0.08) 31px, rgba(255,255,255,0.08) 32px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0px, transparent 11px,
+      rgba(255,255,255,0.10) 11px, rgba(255,255,255,0.10) 12px
+    ),
+    /* slight warm cast on the floor surface to contrast with the cool sky */
+    linear-gradient(to bottom, rgba(20,30,52,0) 0%, rgba(12,18,32,0.7) 100%);
+}
+
+/* Ensure the existing ground-line div sits above the floor tiles */
+#duelContainer > .absolute.bottom-0 {
+  z-index: 3;
+  /* Thicken and colour the ground line to feel like a GBA battle platform edge */
+  height: 3px !important;
+  background: linear-gradient(
+    to right,
+    #1a3060, #3a5a90 15%, #5a80b8 30%, #3a5a90 50%,
+    #5a80b8 70%, #3a5a90 85%, #1a3060
+  ) !important;
+  box-shadow: 0 1px 0 #0a1020, 0 -1px 0 rgba(120,160,220,0.25);
+}
+
+/* #stageWrapper must sit above BOTH #duelContainer pseudo-elements
+   (::before at z-index:0, ::after at z-index:1) so the stickmen it
+   contains are never painted behind the sky or mountain layers.
+   The JS only sets transform/style.left on this element — a z-index
+   here is completely safe and doesn't affect any positional logic. */
+#stageWrapper {
+  z-index: 2;
+}
+
+/* Keep the stickmen and all JS-driven VFX above the floor tile layer */
+.stickman, .spark-vfx, .hit-flash, .mirror-body {
+  z-index: 1;
+  position: absolute; /* already set, but explicit z-index requires a stacking context */
+}
+
+/* Faint ambient "stage light" vignette — darkens the corners of the arena
+   so the eye naturally stays on the centre-stage action */
+#duelContainer {
+  box-shadow:
+    inset 60px 0   40px -20px rgba(0,0,0,0.45),  /* left dark wing */
+    inset -60px 0  40px -20px rgba(0,0,0,0.45),  /* right dark wing */
+    inset 0 -40px  30px -15px rgba(0,0,0,0.3);   /* floor shadow */
+}
